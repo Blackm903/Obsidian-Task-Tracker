@@ -27,7 +27,7 @@ Your Vault/
 ├── Logic.md            # Template file for new tag tracking files
 ├── Tags/               # Folder containing all tag tracking files
 │   ├── Email.md
-│   ├── SOS.md
+│   ├── Schedule.md
 │   └── [TagName].md
 └── Completed.md        # Auto-generated file for completed items
 ```
