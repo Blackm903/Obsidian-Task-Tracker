@@ -1,292 +1,791 @@
 ```dataviewjs
 
+  
+
 const tagsFolder = "Tags";
+
 let existingTags = [];
 
+  
+
 try {
-    const tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
-    if (tagsFolderObj && tagsFolderObj.children) {
-        existingTags = tagsFolderObj.children
-            .filter(file => file.name.endsWith('.md'))
-            .map(file => file.name.replace('.md', ''))
-            .sort();
-    }
+
+    const tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
+
+    if (tagsFolderObj && tagsFolderObj.children) {
+
+        existingTags = tagsFolderObj.children
+
+            .filter(file => file.name.endsWith('.md'))
+
+            .map(file => file.name.replace('.md', ''))
+
+            .sort();
+
+    }
+
 } catch (error) {
-    console.log("Tags folder may not exist yet:", error);
+
+    console.log("Tags folder may not exist yet:", error);
+
 }
+
+  
 
 const formContainer = dv.el("div", "", { cls: "tag-form-container" });
+
 formContainer.style.marginBottom = "20px";
+
 formContainer.style.display = "flex";
+
 formContainer.style.alignItems = "center";
+
 formContainer.style.gap = "10px";
 
-const tagInput = dv.el("input", "", { 
-    attr: { 
-        type: "text", 
-        id: "tagInput",
-        placeholder: "Enter tag name (e.g., Email, SOS, Urgent)"
-    },
-    cls: "tag-input"
+  
+
+const tagInput = dv.el("input", "", {
+
+    attr: {
+
+        type: "text",
+
+        id: "tagInput",
+
+        placeholder: "Enter tag name (e.g., Email, SOS, Urgent)"
+
+    },
+
+    cls: "tag-input"
+
 });
+
 tagInput.style.padding = "8px";
+
 tagInput.style.border = "1px solid #ccc";
+
 tagInput.style.borderRadius = "4px";
+
 tagInput.style.flex = "1";
+
 tagInput.style.fontSize = "14px";
 
+  
+
 const submitButton = dv.el("button", "Submit", { attr: { id: "submitTag" } });
+
 submitButton.style.padding = "8px 16px";
+
 submitButton.style.backgroundColor = "#4CAF50";
+
 submitButton.style.color = "white";
+
 submitButton.style.border = "none";
+
 submitButton.style.borderRadius = "4px";
+
 submitButton.style.cursor = "pointer";
+
 submitButton.style.fontSize = "14px";
 
+  
+
+const scanButton = dv.el("button", "SCAN", { attr: { id: "scanTags" } });
+
+scanButton.style.padding = "8px 16px";
+
+scanButton.style.backgroundColor = "#2196F3";
+
+scanButton.style.color = "white";
+
+scanButton.style.border = "none";
+
+scanButton.style.borderRadius = "4px";
+
+scanButton.style.cursor = "pointer";
+
+scanButton.style.fontSize = "14px";
+
+scanButton.title = "Scan your vault for tags automatically";
+
+  
+
 formContainer.appendChild(tagInput);
+
 formContainer.appendChild(submitButton);
+
+formContainer.appendChild(scanButton);
+
 dv.container.appendChild(formContainer);
 
-const tableContainer = dv.el("div", "", { attr: { id: "tagsTableContainer" } });
+  
+
+const tableContainer = document.createElement("div");
+
+tableContainer.id = "tagsTableContainer";
+
 dv.container.appendChild(tableContainer);
 
+  
+
 function showNotification(message, isError = false) {
-    const notification = document.createElement("div");
-    notification.textContent = message;
-    notification.style.position = "fixed";
-    notification.style.top = "20px";
-    notification.style.right = "20px";
-    notification.style.padding = "12px 20px";
-    notification.style.backgroundColor = isError ? "#f44336" : "#4CAF50";
-    notification.style.color = "white";
-    notification.style.borderRadius = "4px";
-    notification.style.zIndex = "10000";
-    notification.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
-    notification.style.fontSize = "14px";
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.opacity = "0";
-        notification.style.transition = "opacity 0.3s";
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 3000);
+
+    const notification = document.createElement("div");
+
+    notification.textContent = message;
+
+    notification.style.position = "fixed";
+
+    notification.style.top = "20px";
+
+    notification.style.right = "20px";
+
+    notification.style.padding = "12px 20px";
+
+    notification.style.backgroundColor = isError ? "#f44336" : "#4CAF50";
+
+    notification.style.color = "white";
+
+    notification.style.borderRadius = "4px";
+
+    notification.style.zIndex = "10000";
+
+    notification.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
+
+    notification.style.fontSize = "14px";
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+
+        notification.style.opacity = "0";
+
+        notification.style.transition = "opacity 0.3s";
+
+        setTimeout(() => {
+
+            if (notification.parentNode) {
+
+                notification.parentNode.removeChild(notification);
+
+            }
+
+        }, 300);
+
+    }, 3000);
+
 }
+
+  
+
+async function scanVaultForTags() {
+
+    const input = document.getElementById("tagInput");
+
+    if (!input) return;
+
+    input.disabled = true;
+
+    const originalValue = input.value;
+
+    try {
+
+        showNotification("Scanning vault for tags...", false);
+
+        let tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
+
+        if (!tagsFolderObj) {
+
+            try {
+
+                tagsFolderObj = await app.vault.createFolder(tagsFolder);
+
+            } catch (error) {
+
+                tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
+
+                if (!tagsFolderObj) {
+
+                    throw new Error("Could not create or access Tags folder: " + error.message);
+
+                }
+
+            }
+
+        }
+
+        let templateContent = "";
+
+        try {
+
+            const templateFile = app.vault.getAbstractFileByPath("Logic.md");
+
+            if (templateFile) {
+
+                templateContent = await app.vault.read(templateFile);
+
+                templateContent = templateContent.replace(/^```dataviewjs\n?/, '').replace(/\n?```\s*$/, '');
+
+            } else {
+
+                throw new Error("Template file Logic.md not found");
+
+            }
+
+        } catch (error) {
+
+            console.error("Error reading template:", error);
+
+            showNotification("Error: Could not read template file Logic.md. Please ensure the file exists.", true);
+
+            input.disabled = false;
+
+            input.focus();
+
+            return;
+
+        }
+
+        const allFiles = app.vault.getMarkdownFiles();
+
+        const excludedPaths = ["Source Files"];
+
+        const foundTags = new Set();
+
+        for (const file of allFiles) {
+
+            const shouldExclude = excludedPaths.some(path => file.path.startsWith(path + "/") || file.path === path);
+
+            if (shouldExclude || file.name === "Logic.md" || file.name === "tag-manager.md") {
+
+                continue;
+
+            }
+
+            try {
+
+                const content = await app.vault.read(file);
+
+                if (content.includes("```dataviewjs")) {
+
+                    continue;
+
+                }
+
+                const hashTags = content.match(/#[\w-]+/g) || [];
+
+                const parenTags = content.match(/\([\w-]+\)/g) || [];
+
+                hashTags.forEach(tag => {
+
+                    const cleanTag = tag.replace('#', '').trim();
+
+                    if (cleanTag && cleanTag.length > 0 && !cleanTag.toLowerCase().includes('priority') && !cleanTag.toLowerCase().includes('due-date') && !cleanTag.toLowerCase().includes('complete') && !cleanTag.toLowerCase().includes('marked-as-complete')) {
+
+                        foundTags.add(cleanTag);
+
+                    }
+
+                });
+
+                parenTags.forEach(tag => {
+
+                    const cleanTag = tag.replace(/^\(|\)$/g, '').trim();
+
+                    if (cleanTag && cleanTag.length > 0) {
+
+                        foundTags.add(cleanTag);
+
+                    }
+
+                });
+
+            } catch (error) {
+
+                console.log(`Error reading file ${file.path}:`, error);
+
+            }
+
+        }
+
+        const existingTagFiles = new Set();
+
+        if (tagsFolderObj && tagsFolderObj.children) {
+
+            tagsFolderObj.children
+
+                .filter(file => file.name.endsWith('.md'))
+
+                .forEach(file => {
+
+                    existingTagFiles.add(file.name.replace('.md', '').toLowerCase());
+
+                });
+
+        }
+
+        const tagsToCreate = Array.from(foundTags).filter(tag => {
+
+            const sanitized = tag.replace(/[^a-zA-Z0-9]/g, '');
+
+            return sanitized && !existingTagFiles.has(sanitized.toLowerCase());
+
+        });
+
+        if (tagsToCreate.length === 0) {
+
+            showNotification("No new tags found to create.", false);
+
+            input.disabled = false;
+
+            setTimeout(() => input.focus(), 0);
+
+            setTimeout(() => renderTagsTable(), 50);
+
+            return;
+
+        }
+
+        showNotification(`Found ${tagsToCreate.length} new tags. Creating files...`, false);
+
+        let createdCount = 0;
+
+        for (const tag of tagsToCreate) {
+
+            const sanitizedTag = tag.replace(/[^a-zA-Z0-9]/g, '');
+
+            if (!sanitizedTag) continue;
+
+            const tagFilePath = `${tagsFolder}/${sanitizedTag}.md`;
+
+            const existingFile = app.vault.getAbstractFileByPath(tagFilePath);
+
+            if (existingFile) {
+
+                continue;
+
+            }
+
+            try {
+
+                const tagTemplateContent = templateContent.replace(/TAGNAME/g, sanitizedTag);
+
+                const finalContent = "```dataviewjs\n\n" + tagTemplateContent + "\n\n```";
+
+                await app.vault.create(tagFilePath, finalContent);
+
+                createdCount++;
+
+            } catch (error) {
+
+                console.error(`Error creating tag file for ${sanitizedTag}:`, error);
+
+            }
+
+        }
+
+        input.disabled = false;
+
+        setTimeout(() => {
+
+            input.focus();
+
+        }, 0);
+
+        setTimeout(() => {
+
+            renderTagsTable();
+
+        }, 50);
+
+        showNotification(`Scan complete! Created ${createdCount} tag files.`, false);
+
+    } catch (error) {
+
+        console.error("Error scanning vault:", error);
+
+        showNotification("Error scanning vault: " + error.message, true);
+
+        input.disabled = false;
+
+        input.value = originalValue;
+
+        input.focus();
+
+    }
+
+}
+
+  
 
 async function createTagDocument(tagName) {
-    const input = document.getElementById("tagInput");
-    if (!input) return;
-    
-    input.disabled = true;
-    const originalValue = input.value;
-    
-    try {
-        const sanitizedTag = tagName.trim().replace(/[^a-zA-Z0-9]/g, '');
-        
-        if (!sanitizedTag) {
-            showNotification("Please enter a valid tag name", true);
-            input.disabled = false;
-            input.focus();
-            return;
-        }
-        
-        const tagFilePath = `${tagsFolder}/${sanitizedTag}.md`;
-        const existingFile = app.vault.getAbstractFileByPath(tagFilePath);
-        
-        if (existingFile) {
-            showNotification(`Tag "${sanitizedTag}" already exists!`, true);
-            input.disabled = false;
-            input.focus();
-            return;
-        }
-        
-        let tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
-        if (!tagsFolderObj) {
-            try {
-                tagsFolderObj = await app.vault.createFolder(tagsFolder);
-            } catch (error) {
-                tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
-                if (!tagsFolderObj) {
-                    throw new Error("Could not create or access Tags folder: " + error.message);
-                }
-            }
-        }
-        
-        let templateContent = "";
-        try {
-            const templateFile = app.vault.getAbstractFileByPath("Logic.md");
-            if (templateFile) {
-                templateContent = await app.vault.read(templateFile);
-                templateContent = templateContent.replace(/^```dataviewjs\n?/, '').replace(/\n?```\s*$/, '');
-            } else {
-                throw new Error("Template file Logic.md not found");
-            }
-        } catch (error) {
-            console.error("Error reading template:", error);
-            showNotification("Error: Could not read template file Logic.md. Please ensure the file exists.", true);
-            input.disabled = false;
-            input.focus();
-            return;
-        }
-        
-        templateContent = templateContent.replace(/TAGNAME/g, sanitizedTag);
-        
-        const finalContent = "```dataviewjs\n\n" + templateContent + "\n\n```";
-        
-        await app.vault.create(tagFilePath, finalContent);
-        
-        input.value = "";
-        input.disabled = false;
-        
-        setTimeout(() => {
-            input.focus();
-        }, 0);
-        
-        setTimeout(() => {
-            renderTagsTable();
-        }, 50);
-        
-        showNotification(`Tag "${sanitizedTag}" created successfully!`);
-        
-    } catch (error) {
-        console.error("Error creating tag document:", error);
-        showNotification("Error creating tag document: " + error.message, true);
-        input.disabled = false;
-        input.value = originalValue;
-        input.focus();
-    }
+
+    const input = document.getElementById("tagInput");
+
+    if (!input) return;
+
+    input.disabled = true;
+
+    const originalValue = input.value;
+
+    try {
+
+        const sanitizedTag = tagName.trim().replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!sanitizedTag) {
+
+            showNotification("Please enter a valid tag name", true);
+
+            input.disabled = false;
+
+            input.focus();
+
+            return;
+
+        }
+
+        const tagFilePath = `${tagsFolder}/${sanitizedTag}.md`;
+
+        const existingFile = app.vault.getAbstractFileByPath(tagFilePath);
+
+        if (existingFile) {
+
+            showNotification(`Tag "${sanitizedTag}" already exists!`, true);
+
+            input.disabled = false;
+
+            input.focus();
+
+            return;
+
+        }
+
+        let tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
+
+        if (!tagsFolderObj) {
+
+            try {
+
+                tagsFolderObj = await app.vault.createFolder(tagsFolder);
+
+            } catch (error) {
+
+                tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
+
+                if (!tagsFolderObj) {
+
+                    throw new Error("Could not create or access Tags folder: " + error.message);
+
+                }
+
+            }
+
+        }
+
+        let templateContent = "";
+
+        try {
+
+            const templateFile = app.vault.getAbstractFileByPath("Logic.md");
+
+            if (templateFile) {
+
+                templateContent = await app.vault.read(templateFile);
+
+                templateContent = templateContent.replace(/^```dataviewjs\n?/, '').replace(/\n?```\s*$/, '');
+
+            } else {
+
+                throw new Error("Template file Logic.md not found");
+
+            }
+
+        } catch (error) {
+
+            console.error("Error reading template:", error);
+
+            showNotification("Error: Could not read template file Logic.md. Please ensure the file exists.", true);
+
+            input.disabled = false;
+
+            input.focus();
+
+            return;
+
+        }
+
+        templateContent = templateContent.replace(/TAGNAME/g, sanitizedTag);
+
+        const finalContent = "```dataviewjs\n\n" + templateContent + "\n\n```";
+
+        await app.vault.create(tagFilePath, finalContent);
+
+        input.value = "";
+
+        input.disabled = false;
+
+        setTimeout(() => {
+
+            input.focus();
+
+        }, 0);
+
+        setTimeout(() => {
+
+            renderTagsTable();
+
+        }, 50);
+
+        showNotification(`Tag "${sanitizedTag}" created successfully!`);
+
+    } catch (error) {
+
+        console.error("Error creating tag document:", error);
+
+        showNotification("Error creating tag document: " + error.message, true);
+
+        input.disabled = false;
+
+        input.value = originalValue;
+
+        input.focus();
+
+    }
+
 }
+
+  
 
 function renderTagsTable() {
-    const container = document.getElementById("tagsTableContainer");
-    if (!container) {
-        console.error("Table container not found");
-        return;
-    }
-    
-    container.innerHTML = "";
-    
-    let currentTags = [];
-    try {
-        const tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
-        if (tagsFolderObj && tagsFolderObj.children) {
-            currentTags = tagsFolderObj.children
-                .filter(file => file.name.endsWith('.md'))
-                .map(file => file.name.replace('.md', ''))
-                .sort();
-        }
-    } catch (error) {
-        console.log("Error reading tags folder:", error);
-    }
-    
-    existingTags = currentTags;
-    
-    const table = document.createElement("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "collapse";
-    table.style.marginTop = "10px";
-    
-    const thead = document.createElement("thead");
-    const headerRow = document.createElement("tr");
-    
-    ["Tag Name"].forEach(header => {
-        const th = document.createElement("th");
-        th.textContent = header;
-        th.style.border = "1px solid #ddd";
-        th.style.padding = "10px";
-        th.style.textAlign = "left";
-        th.style.backgroundColor = "#f2f2f2";
-        headerRow.appendChild(th);
-    });
-    
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-    
-    const tbody = document.createElement("tbody");
-    
-    if (currentTags.length === 0) {
-        const placeholderRow = document.createElement("tr");
-        
-        const placeholderCell = document.createElement("td");
-        placeholderCell.textContent = "No Tags have been created";
-        placeholderCell.style.border = "1px solid #ddd";
-        placeholderCell.style.padding = "10px";
-        placeholderCell.style.color = "#666";
-        placeholderCell.style.fontStyle = "italic";
-        placeholderCell.setAttribute("colspan", "1");
-        placeholderCell.style.textAlign = "center";
-        
-        placeholderRow.appendChild(placeholderCell);
-        tbody.appendChild(placeholderRow);
-    } else {
-        currentTags.forEach(tag => {
-            const row = document.createElement("tr");
-            
-            const tagCell = document.createElement("td");
-            tagCell.textContent = tag;
-            tagCell.style.border = "1px solid #ddd";
-            tagCell.style.padding = "10px";
-            tagCell.style.cursor = "pointer";
-            tagCell.style.color = "#4A90E2";
-            tagCell.style.textDecoration = "underline";
-            
-            tagCell.addEventListener("click", async () => {
-                try {
-                    const filePath = `${tagsFolder}/${tag}.md`;
-                    const file = app.vault.getAbstractFileByPath(filePath);
-                    if (file) {
-                        await app.workspace.open(file);
-                    }
-                } catch (error) {
-                    console.error("Error opening file:", error);
-                }
-            });
-            
-            row.appendChild(tagCell);
-            tbody.appendChild(row);
-        });
-    }
-    
-    table.appendChild(tbody);
-    container.appendChild(table);
+
+    const container = document.getElementById("tagsTableContainer");
+
+    if (!container) {
+
+        console.error("Table container not found");
+
+        return;
+
+    }
+
+    container.innerHTML = "";
+
+    let currentTags = [];
+
+    try {
+
+        const tagsFolderObj = app.vault.getAbstractFileByPath(tagsFolder);
+
+        if (tagsFolderObj && tagsFolderObj.children) {
+
+            currentTags = tagsFolderObj.children
+
+                .filter(file => file.name.endsWith('.md'))
+
+                .map(file => file.name.replace('.md', ''))
+
+                .sort();
+
+        }
+
+    } catch (error) {
+
+        console.log("Error reading tags folder:", error);
+
+    }
+
+    existingTags = currentTags;
+
+    const table = document.createElement("table");
+
+    table.style.width = "100%";
+
+    table.style.borderCollapse = "collapse";
+
+    table.style.marginTop = "10px";
+
+    const thead = document.createElement("thead");
+
+    const headerRow = document.createElement("tr");
+
+    ["Tag Name"].forEach(header => {
+
+        const th = document.createElement("th");
+
+        th.textContent = header;
+
+        th.style.border = "1px solid #ddd";
+
+        th.style.padding = "10px";
+
+        th.style.textAlign = "left";
+
+        th.style.backgroundColor = "#f2f2f2";
+
+        headerRow.appendChild(th);
+
+    });
+
+    thead.appendChild(headerRow);
+
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+
+    if (currentTags.length === 0) {
+
+        const placeholderRow = document.createElement("tr");
+
+        const placeholderCell = document.createElement("td");
+
+        placeholderCell.textContent = "No Tags have been created";
+
+        placeholderCell.style.border = "1px solid #ddd";
+
+        placeholderCell.style.padding = "10px";
+
+        placeholderCell.style.color = "#666";
+
+        placeholderCell.style.fontStyle = "italic";
+
+        placeholderCell.setAttribute("colspan", "1");
+
+        placeholderCell.style.textAlign = "center";
+
+        placeholderRow.appendChild(placeholderCell);
+
+        tbody.appendChild(placeholderRow);
+
+    } else {
+
+        currentTags.forEach(tag => {
+
+            const row = document.createElement("tr");
+
+            const tagCell = document.createElement("td");
+
+            tagCell.textContent = tag;
+
+            tagCell.style.border = "1px solid #ddd";
+
+            tagCell.style.padding = "10px";
+
+            tagCell.style.cursor = "pointer";
+
+            tagCell.style.color = "#4A90E2";
+
+            tagCell.style.textDecoration = "underline";
+
+            tagCell.addEventListener("click", async () => {
+
+                try {
+
+                    const filePath = `${tagsFolder}/${tag}.md`;
+
+                    const file = app.vault.getAbstractFileByPath(filePath);
+
+                    if (file) {
+
+                        await app.workspace.open(file);
+
+                    }
+
+                } catch (error) {
+
+                    console.error("Error opening file:", error);
+
+                }
+
+            });
+
+            row.appendChild(tagCell);
+
+            tbody.appendChild(row);
+
+        });
+
+    }
+
+    table.appendChild(tbody);
+
+    container.appendChild(table);
+
 }
 
+  
+
 setTimeout(() => {
-    const submitBtn = document.getElementById("submitTag");
-    const input = document.getElementById("tagInput");
-    
-    if (submitBtn) {
-        submitBtn.addEventListener("click", async (e) => {
-            e.preventDefault(); // Prevent any default behavior
-            const tagName = input.value.trim();
-            if (tagName) {
-                await createTagDocument(tagName);
-            } else {
-                showNotification("Please enter a tag name", true);
-            }
-        });
-    }
-    
-    if (input) {
-        input.addEventListener("keypress", async (e) => {
-            if (e.key === "Enter") {
-                e.preventDefault(); // Prevent form submission
-                const tagName = input.value.trim();
-                if (tagName) {
-                    await createTagDocument(tagName);
-                } else {
-                    showNotification("Please enter a tag name", true);
-                }
-            }
-        });
-    }
-    
-    renderTagsTable();
+
+    const submitBtn = document.getElementById("submitTag");
+
+    const scanBtn = document.getElementById("scanTags");
+
+    const input = document.getElementById("tagInput");
+
+    if (submitBtn) {
+
+        submitBtn.addEventListener("click", async (e) => {
+
+            e.preventDefault();
+
+            const tagName = input.value.trim();
+
+            if (tagName) {
+
+                await createTagDocument(tagName);
+
+            } else {
+
+                showNotification("Please enter a tag name", true);
+
+            }
+
+        });
+
+    }
+
+    if (scanBtn) {
+
+        scanBtn.addEventListener("click", async (e) => {
+
+            e.preventDefault();
+
+            await scanVaultForTags();
+
+        });
+
+    }
+
+    if (input) {
+
+        input.addEventListener("keypress", async (e) => {
+
+            if (e.key === "Enter") {
+
+                e.preventDefault();
+
+                const tagName = input.value.trim();
+
+                if (tagName) {
+
+                    await createTagDocument(tagName);
+
+                } else {
+
+                    showNotification("Please enter a tag name", true);
+
+                }
+
+            }
+
+        });
+
+    }
+
+    renderTagsTable();
+
 }, 100);
 
-```
+  
 
+```
