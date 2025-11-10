@@ -1,42 +1,22 @@
 ```dataviewjs
 
-  
-
 const currentFile = dv.current().file;
-
 const tagName = currentFile ? currentFile.name.replace('.md', '') : "TAGNAME";
-
 const tagWithHash = "#" + tagName;
-
 const tagEntriesVar = tagName.toLowerCase() + "Entries";
-
 const tagTableContainer = tagName.toLowerCase() + "TableContainer";
-
-  
 
 const excludedDocuments = ["Master List", "Completed"];
 
-  
-
 const tagWithHashLower = tagWithHash.toLowerCase();
 
-  
-
-const pages = dv.pages().where(p =>
-
-    p.file.tags &&
-
-    p.file.tags.some(tag => tag.toLowerCase() === tagWithHashLower) &&
-
-    !excludedDocuments.includes(p.file.name.replace('.md', '')) &&
-
-    !p.file.path.startsWith("Completed/") &&
-
-    !p.file.path.startsWith("Archive/")
-
+const pages = dv.pages().where(p => 
+    p.file.tags && 
+    p.file.tags.some(tag => tag.toLowerCase() === tagWithHashLower) && 
+    !excludedDocuments.includes(p.file.name.replace('.md', '')) &&
+    !p.file.path.startsWith("Completed/") &&
+    !p.file.path.startsWith("Archive/")
 );
-
-  
 
   
 
@@ -44,3245 +24,1773 @@ let entries = [];
 
   
 
-  
-
 for (let page of pages) {
 
-  
+    const fileContent = await dv.io.load(page.file.path);
 
-    const fileContent = await dv.io.load(page.file.path);
+    const lines = fileContent.split('\n');
 
-  
+    lines.forEach((line, index) => {
 
-    const lines = fileContent.split('\n');
+        const lineLower = line.toLowerCase();
+        const tagInParens = `(${tagName.toLowerCase()})`;
+        if (lineLower.includes(tagWithHashLower) || lineLower.includes(tagInParens)) {
 
-  
+            const isCompleted = line.includes('#complete');
 
-    lines.forEach((line, index) => {
+            const priorityMatch = line.match(/#priority-([1-5])/);
 
-  
+            const priority = priorityMatch ? parseInt(priorityMatch[1]) : null;
 
-        const lineLower = line.toLowerCase();
+            const dueDateMatch = line.match(/#due-date-(\d{2}-\d{2}-\d{4})/);
+            let dueDate = dueDateMatch ? dueDateMatch[1] : null;
 
-        const tagInParens = `(${tagName.toLowerCase()})`;
+            entries.push({
 
-        if (lineLower.includes(tagWithHashLower) || lineLower.includes(tagInParens)) {
+                label: tagName,
 
-  
+                text: line.trim(),
 
-            const isCompleted = line.includes('#complete');
+                document: page.file.name,
 
-  
+                lastEdit: page.file.mtime,
 
-            const priorityMatch = line.match(/#priority-([1-5])/);
+                filePath: page.file.path,
 
-  
+                lineIndex: index,
 
-            const priority = priorityMatch ? parseInt(priorityMatch[1]) : null;
+                originalLine: line,
 
-  
+                isCompleted: isCompleted,
 
-            const dueDateMatch = line.match(/#due-date-(\d{2}-\d{2}-\d{4})/);
+                priority: priority,
 
-            let dueDate = dueDateMatch ? dueDateMatch[1] : null;
+                dueDate: dueDate
 
-  
+            });
 
-            entries.push({
+        }
 
-  
-
-                label: tagName,
-
-  
-
-                text: line.trim(),
-
-  
-
-                document: page.file.name,
-
-  
-
-                lastEdit: page.file.mtime,
-
-  
-
-                filePath: page.file.path,
-
-  
-
-                lineIndex: index,
-
-  
-
-                originalLine: line,
-
-  
-
-                isCompleted: isCompleted,
-
-  
-
-                priority: priority,
-
-  
-
-                dueDate: dueDate
-
-  
-
-            });
-
-  
-
-        }
-
-  
-
-    });
-
-  
+    });
 
 }
-
-  
 
   
 
 function calculateDefaultDueDate() {
-
-    const today = new Date();
-
-    const dayOfWeek = today.getDay();
-
-    let dueDate = new Date(today);
-
-    if (dayOfWeek === 5) {
-
-        dueDate.setDate(today.getDate() + 5);
-
-    } else {
-
-        const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
-
-        const daysToAdd = daysUntilFriday === 0 ? 7 : daysUntilFriday;
-
-        dueDate.setDate(today.getDate() + daysToAdd);
-
-    }
-
-    const month = String(dueDate.getMonth() + 1).padStart(2, '0');
-
-    const day = String(dueDate.getDate()).padStart(2, '0');
-
-    const year = dueDate.getFullYear();
-
-    return `${month}-${day}-${year}`;
-
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    
+    let dueDate = new Date(today);
+    
+    if (dayOfWeek === 5) {
+        dueDate.setDate(today.getDate() + 5);
+    } else {
+        const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
+        const daysToAdd = daysUntilFriday === 0 ? 7 : daysUntilFriday;
+        dueDate.setDate(today.getDate() + daysToAdd);
+    }
+    
+    const month = String(dueDate.getMonth() + 1).padStart(2, '0');
+    const day = String(dueDate.getDate()).padStart(2, '0');
+    const year = dueDate.getFullYear();
+    
+    return `${month}-${day}-${year}`;
 }
-
-  
 
 function getDaysUntilDueDate(dueDateString) {
-
-    if (!dueDateString) return null;
-
-    const [month, day, year] = dueDateString.split('-').map(Number);
-
-    const dueDate = new Date(year, month - 1, day);
-
-    const today = new Date();
-
-    today.setHours(0, 0, 0, 0);
-
-    dueDate.setHours(0, 0, 0, 0);
-
-    const diffTime = dueDate - today;
-
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    return diffDays;
-
+    if (!dueDateString) return null;
+    
+    const [month, day, year] = dueDateString.split('-').map(Number);
+    const dueDate = new Date(year, month - 1, day);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = dueDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
 }
-
-  
 
 function getPriorityColor(priority) {
 
-  
+    if (!priority || priority === "") return "#ffffff";
 
-    if (!priority || priority === "") return "#ffffff";
+    
 
-  
+    switch(parseInt(priority)) {
 
-  
+        case 1: return "#ff4444";
 
-    switch(parseInt(priority)) {
+        case 2: return "#ff8800";
 
-  
+        case 3: return "#ffdd00";
 
-        case 1: return "#ff4444";
+        case 4: return "#90ee90";
 
-  
+        case 5: return "#4CAF50";
 
-        case 2: return "#ff8800";
+        default: return "#ffffff";
 
-  
-
-        case 3: return "#ffdd00";
-
-  
-
-        case 4: return "#90ee90";
-
-  
-
-        case 5: return "#4CAF50";
-
-  
-
-        default: return "#ffffff";
-
-  
-
-    }
-
-  
+    }
 
 }
-
-  
 
 let prioritySortDirection = "ascending";
 
-  
-
 let dueDateSortDirection = "ascending";
 
-  
-
 function parseDueDate(dueDateString) {
-
-    if (!dueDateString) return null;
-
-    const [month, day, year] = dueDateString.split('-').map(Number);
-
-    if (isNaN(month) || isNaN(day) || isNaN(year)) return null;
-
-    return new Date(year, month - 1, day);
-
+    if (!dueDateString) return null;
+    const [month, day, year] = dueDateString.split('-').map(Number);
+    if (isNaN(month) || isNaN(day) || isNaN(year)) return null;
+    return new Date(year, month - 1, day);
 }
-
-  
 
 function sortEntries() {
-
-    entries.sort((a, b) => {
-
-        const priorityA = a.priority !== null && a.priority !== undefined ? a.priority : 999;
-
-        const priorityB = b.priority !== null && b.priority !== undefined ? b.priority : 999;
-
-        if (priorityA !== priorityB) {
-
-            if (prioritySortDirection === "ascending") {
-
-                return priorityA - priorityB;
-
-            } else {
-
-                return priorityB - priorityA;
-
-            }
-
-        }
-
-        const dueDateA = parseDueDate(a.dueDate);
-
-        const dueDateB = parseDueDate(b.dueDate);
-
-        if (!dueDateA && !dueDateB) {
-
-        } else if (!dueDateA) {
-
-            return dueDateSortDirection === "ascending" ? 1 : -1;
-
-        } else if (!dueDateB) {
-
-            return dueDateSortDirection === "ascending" ? -1 : 1;
-
-        } else {
-
-            const dateDiff = dueDateA - dueDateB;
-
-            if (dateDiff !== 0) {
-
-                return dueDateSortDirection === "ascending" ? dateDiff : -dateDiff;
-
-            }
-
-        }
-
-        return b.lastEdit - a.lastEdit;
-
-    });
-
+    entries.sort((a, b) => {
+        const priorityA = a.priority !== null && a.priority !== undefined ? a.priority : 999;
+        const priorityB = b.priority !== null && b.priority !== undefined ? b.priority : 999;
+        
+        if (priorityA !== priorityB) {
+            if (prioritySortDirection === "ascending") {
+                return priorityA - priorityB;
+            } else {
+                return priorityB - priorityA;
+            }
+        }
+        
+        const dueDateA = parseDueDate(a.dueDate);
+        const dueDateB = parseDueDate(b.dueDate);
+        
+        if (!dueDateA && !dueDateB) {
+        } else if (!dueDateA) {
+            return dueDateSortDirection === "ascending" ? 1 : -1;
+        } else if (!dueDateB) {
+            return dueDateSortDirection === "ascending" ? -1 : 1;
+        } else {
+            const dateDiff = dueDateA - dueDateB;
+            if (dateDiff !== 0) {
+                return dueDateSortDirection === "ascending" ? dateDiff : -dateDiff;
+            }
+        }
+        
+        return b.lastEdit - a.lastEdit;
+    });
 }
-
-  
 
 sortEntries();
 
   
 
-  
-
 async function updatePriority(entry, newPriority) {
 
-  
+    try {
 
-    try {
+        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
 
-  
+        if (!sourceFile) {
 
-        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
+            console.error("File not found:", entry.filePath);
 
-  
+            return;
 
-        if (!sourceFile) {
+        }
 
-  
+        
 
-            console.error("File not found:", entry.filePath);
+        const fileContent = await app.vault.read(sourceFile);
 
-  
+        const lines = fileContent.split('\n');
 
-            return;
+        
 
-  
+        let line = lines[entry.lineIndex];
 
-        }
+        line = line.replace(/\s*#priority-[1-5]\s*/g, ' ').trim();
 
-  
+        
 
-  
+        if (newPriority && newPriority !== "") {
 
-        const fileContent = await app.vault.read(sourceFile);
+            line = line + ' #priority-' + newPriority;
 
-  
+        }
 
-        const lines = fileContent.split('\n');
+        
 
-  
+        lines[entry.lineIndex] = line;
 
-  
+        
 
-        let line = lines[entry.lineIndex];
+        const newContent = lines.join('\n');
 
-  
+        await app.vault.modify(sourceFile, newContent);
 
-        line = line.replace(/\s*#priority-[1-5]\s*/g, ' ').trim();
+        
 
-  
+        entry.priority = newPriority && newPriority !== "" ? parseInt(newPriority) : null;
 
-  
+        entry.text = line;
 
-        if (newPriority && newPriority !== "") {
+        
 
-  
+        sortEntries();
 
-            line = line + ' #priority-' + newPriority;
+        
 
-  
+        renderTable();
 
-        }
+        
 
-  
+    } catch (error) {
 
-  
+        console.error("Error updating priority:", error);
 
-        lines[entry.lineIndex] = line;
-
-  
-
-  
-
-        const newContent = lines.join('\n');
-
-  
-
-        await app.vault.modify(sourceFile, newContent);
-
-  
-
-  
-
-        entry.priority = newPriority && newPriority !== "" ? parseInt(newPriority) : null;
-
-  
-
-        entry.text = line;
-
-  
-
-  
-
-        sortEntries();
-
-  
-
-  
-
-        renderTable();
-
-  
-
-  
-
-    } catch (error) {
-
-  
-
-        console.error("Error updating priority:", error);
-
-  
-
-    }
-
-  
+    }
 
 }
-
-  
 
   
 
 async function updateDueDate(entry, newDueDate) {
 
-  
+    try {
 
-    try {
+        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
 
-  
+        if (!sourceFile) {
 
-        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
+            console.error("File not found:", entry.filePath);
 
-  
+            return;
 
-        if (!sourceFile) {
+        }
 
-  
+        
 
-            console.error("File not found:", entry.filePath);
+        const fileContent = await app.vault.read(sourceFile);
 
-  
+        const lines = fileContent.split('\n');
 
-            return;
+        
 
-  
+        let line = lines[entry.lineIndex];
 
-        }
+        line = line.replace(/\s*#due-date-\d{2}-\d{2}-\d{4}\s*/g, ' ').trim();
 
-  
+        
 
-  
+        if (newDueDate && newDueDate !== "") {
 
-        const fileContent = await app.vault.read(sourceFile);
+            line = line + ' #due-date-' + newDueDate;
 
-  
+        }
 
-        const lines = fileContent.split('\n');
+        
 
-  
+        lines[entry.lineIndex] = line;
 
-  
+        
 
-        let line = lines[entry.lineIndex];
+        const newContent = lines.join('\n');
 
-  
+        await app.vault.modify(sourceFile, newContent);
 
-        line = line.replace(/\s*#due-date-\d{2}-\d{2}-\d{4}\s*/g, ' ').trim();
+        
 
-  
+        entry.dueDate = newDueDate && newDueDate !== "" ? newDueDate : null;
 
-  
+        entry.text = line;
 
-        if (newDueDate && newDueDate !== "") {
+        
 
-  
+        renderTable();
 
-            line = line + ' #due-date-' + newDueDate;
+        
 
-  
+    } catch (error) {
 
-        }
+        console.error("Error updating due date:", error);
 
-  
-
-  
-
-        lines[entry.lineIndex] = line;
-
-  
-
-  
-
-        const newContent = lines.join('\n');
-
-  
-
-        await app.vault.modify(sourceFile, newContent);
-
-  
-
-  
-
-        entry.dueDate = newDueDate && newDueDate !== "" ? newDueDate : null;
-
-  
-
-        entry.text = line;
-
-  
-
-  
-
-        renderTable();
-
-  
-
-  
-
-    } catch (error) {
-
-  
-
-        console.error("Error updating due date:", error);
-
-  
-
-    }
-
-  
+    }
 
 }
-
-  
 
   
 
 function showCompletionConfirmation(callback) {
 
-  
+    const overlay = document.createElement("div");
 
-    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
 
-  
+    overlay.style.top = "0";
 
-    overlay.style.position = "fixed";
+    overlay.style.left = "0";
 
-  
+    overlay.style.width = "100%";
 
-    overlay.style.top = "0";
+    overlay.style.height = "100%";
 
-  
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
 
-    overlay.style.left = "0";
+    overlay.style.zIndex = "10000";
 
-  
+    overlay.style.display = "flex";
 
-    overlay.style.width = "100%";
+    overlay.style.justifyContent = "center";
 
-  
+    overlay.style.alignItems = "center";
 
-    overlay.style.height = "100%";
+    
 
-  
+    const toast = document.createElement("div");
 
-    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+    toast.style.backgroundColor = "#fff";
 
-  
+    toast.style.padding = "24px";
 
-    overlay.style.zIndex = "10000";
+    toast.style.borderRadius = "8px";
 
-  
+    toast.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
 
-    overlay.style.display = "flex";
+    toast.style.maxWidth = "400px";
 
-  
+    toast.style.width = "90%";
 
-    overlay.style.justifyContent = "center";
+    toast.style.textAlign = "center";
 
-  
+    
 
-    overlay.style.alignItems = "center";
+    const title = document.createElement("div");
 
-  
+    title.textContent = "COMPLETION";
 
-  
+    title.style.fontSize = "18px";
 
-    const toast = document.createElement("div");
+    title.style.fontWeight = "bold";
 
-  
+    title.style.marginBottom = "16px";
 
-    toast.style.backgroundColor = "#fff";
+    title.style.color = "#333";
 
-  
+    toast.appendChild(title);
 
-    toast.style.padding = "24px";
+    
 
-  
+    const message = document.createElement("div");
 
-    toast.style.borderRadius = "8px";
+    message.textContent = "DO YOU WANT TO COMPLETE THIS TASK?";
 
-  
+    message.style.fontSize = "14px";
 
-    toast.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
+    message.style.marginBottom = "24px";
 
-  
+    message.style.color = "#666";
 
-    toast.style.maxWidth = "400px";
+    toast.appendChild(message);
 
-  
+    
 
-    toast.style.width = "90%";
+    const buttonContainer = document.createElement("div");
 
-  
+    buttonContainer.style.display = "flex";
 
-    toast.style.textAlign = "center";
+    buttonContainer.style.gap = "12px";
 
-  
+    buttonContainer.style.justifyContent = "center";
 
-  
+    
 
-    const title = document.createElement("div");
+    const noButton = document.createElement("button");
 
-  
+    noButton.textContent = "NO";
 
-    title.textContent = "COMPLETION";
+    noButton.style.padding = "10px 24px";
 
-  
+    noButton.style.backgroundColor = "#f44336";
 
-    title.style.fontSize = "18px";
+    noButton.style.color = "white";
 
-  
+    noButton.style.border = "none";
 
-    title.style.fontWeight = "bold";
+    noButton.style.borderRadius = "4px";
 
-  
+    noButton.style.cursor = "pointer";
 
-    title.style.marginBottom = "16px";
+    noButton.style.fontSize = "14px";
 
-  
+    noButton.style.fontWeight = "bold";
 
-    title.style.color = "#333";
+    noButton.addEventListener("click", () => {
 
-  
+        document.body.removeChild(overlay);
 
-    toast.appendChild(title);
+    });
 
-  
+    buttonContainer.appendChild(noButton);
 
-  
+    
 
-    const message = document.createElement("div");
+    const yesButton = document.createElement("button");
 
-  
+    yesButton.textContent = "YES";
 
-    message.textContent = "DO YOU WANT TO COMPLETE THIS TASK?";
+    yesButton.style.padding = "10px 24px";
 
-  
+    yesButton.style.backgroundColor = "#4CAF50";
 
-    message.style.fontSize = "14px";
+    yesButton.style.color = "white";
 
-  
+    yesButton.style.border = "none";
 
-    message.style.marginBottom = "24px";
+    yesButton.style.borderRadius = "4px";
 
-  
+    yesButton.style.cursor = "pointer";
 
-    message.style.color = "#666";
+    yesButton.style.fontSize = "14px";
 
-  
+    yesButton.style.fontWeight = "bold";
 
-    toast.appendChild(message);
+    yesButton.addEventListener("click", () => {
 
-  
+        document.body.removeChild(overlay);
 
-  
+        callback();
 
-    const buttonContainer = document.createElement("div");
+    });
 
-  
+    buttonContainer.appendChild(yesButton);
 
-    buttonContainer.style.display = "flex";
+    
 
-  
+    toast.appendChild(buttonContainer);
 
-    buttonContainer.style.gap = "12px";
+    overlay.appendChild(toast);
 
-  
+    document.body.appendChild(overlay);
 
-    buttonContainer.style.justifyContent = "center";
+    
 
-  
+    overlay.addEventListener("click", (e) => {
 
-  
+        if (e.target === overlay) {
 
-    const noButton = document.createElement("button");
+            document.body.removeChild(overlay);
 
-  
+        }
 
-    noButton.textContent = "NO";
-
-  
-
-    noButton.style.padding = "10px 24px";
-
-  
-
-    noButton.style.backgroundColor = "#f44336";
-
-  
-
-    noButton.style.color = "white";
-
-  
-
-    noButton.style.border = "none";
-
-  
-
-    noButton.style.borderRadius = "4px";
-
-  
-
-    noButton.style.cursor = "pointer";
-
-  
-
-    noButton.style.fontSize = "14px";
-
-  
-
-    noButton.style.fontWeight = "bold";
-
-  
-
-    noButton.addEventListener("click", () => {
-
-  
-
-        document.body.removeChild(overlay);
-
-  
-
-    });
-
-  
-
-    buttonContainer.appendChild(noButton);
-
-  
-
-  
-
-    const yesButton = document.createElement("button");
-
-  
-
-    yesButton.textContent = "YES";
-
-  
-
-    yesButton.style.padding = "10px 24px";
-
-  
-
-    yesButton.style.backgroundColor = "#4CAF50";
-
-  
-
-    yesButton.style.color = "white";
-
-  
-
-    yesButton.style.border = "none";
-
-  
-
-    yesButton.style.borderRadius = "4px";
-
-  
-
-    yesButton.style.cursor = "pointer";
-
-  
-
-    yesButton.style.fontSize = "14px";
-
-  
-
-    yesButton.style.fontWeight = "bold";
-
-  
-
-    yesButton.addEventListener("click", () => {
-
-  
-
-        document.body.removeChild(overlay);
-
-  
-
-        callback();
-
-  
-
-    });
-
-  
-
-    buttonContainer.appendChild(yesButton);
-
-  
-
-  
-
-    toast.appendChild(buttonContainer);
-
-  
-
-    overlay.appendChild(toast);
-
-  
-
-    document.body.appendChild(overlay);
-
-  
-
-  
-
-    overlay.addEventListener("click", (e) => {
-
-  
-
-        if (e.target === overlay) {
-
-  
-
-            document.body.removeChild(overlay);
-
-  
-
-        }
-
-  
-
-    });
-
-  
+    });
 
 }
-
-  
 
   
 
 async function toggleComplete(entry) {
 
-  
+    try {
 
-    try {
+        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
 
-  
+        if (!sourceFile) {
 
-        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
+            console.error("File not found:", entry.filePath);
 
-  
+            return;
 
-        if (!sourceFile) {
+        }
 
-  
+        
 
-            console.error("File not found:", entry.filePath);
+        if (entry.isCompleted) {
 
-  
+            const fileContent = await app.vault.read(sourceFile);
 
-            return;
+            const lines = fileContent.split('\n');
 
-  
+            let line = lines[entry.lineIndex];
 
-        }
+            line = line.replace(/\s*#complete\s*/g, ' ');
 
-  
+            line = line.replace(/\s*#marked-as-complete-\d{2}-\d{2}-\d{4}\s*/g, ' ');
 
-  
+            line = line.trim();
 
-        if (entry.isCompleted) {
+            lines[entry.lineIndex] = line;
 
-  
+            const newContent = lines.join('\n');
 
-            const fileContent = await app.vault.read(sourceFile);
+            await app.vault.modify(sourceFile, newContent);
 
-  
+            entry.isCompleted = false;
 
-            const lines = fileContent.split('\n');
+            entry.text = line;
 
-  
+            renderTable();
 
-            let line = lines[entry.lineIndex];
+        } else {
 
-  
+            showCompletionConfirmation(async () => {
 
-            line = line.replace(/\s*#complete\s*/g, ' ');
+                const fileContent = await app.vault.read(sourceFile);
 
-  
+            const lines = fileContent.split('\n');
 
-            line = line.replace(/\s*#marked-as-complete-\d{2}-\d{2}-\d{4}\s*/g, ' ');
+            const today = new Date();
 
-  
+            const month = String(today.getMonth() + 1).padStart(2, '0');
 
-            line = line.trim();
+            const day = String(today.getDate()).padStart(2, '0');
 
-  
+            const year = today.getFullYear();
 
-            lines[entry.lineIndex] = line;
+            const dateString = `${month}-${day}-${year}`;
 
-  
+            let currentLine = lines[entry.lineIndex].trim();
 
-            const newContent = lines.join('\n');
+            const taskText = currentLine.replace(/#[\w-]+/g, '').replace(/\([\w-]+\)/g, '').trim().replace(/\s+/g, ' ');
 
-  
+            const completionTag = `#marked-as-complete-${dateString}`;
 
-            await app.vault.modify(sourceFile, newContent);
+            currentLine = taskText + ' ' + completionTag + ' #complete';
 
-  
+            lines[entry.lineIndex] = currentLine;
 
-            entry.isCompleted = false;
+            const newSourceContent = lines.join('\n');
 
-  
+            await app.vault.modify(sourceFile, newSourceContent);
 
-            entry.text = line;
+            
 
-  
+            const completedFolder = "Completed";
 
-            renderTable();
+            const completedFilePath = `${completedFolder}/Completed ${dateString}.md`;
 
-  
+            
 
-        } else {
+            let completedFolderObj = app.vault.getAbstractFileByPath(completedFolder);
 
-  
+            if (!completedFolderObj) {
 
-            showCompletionConfirmation(async () => {
+                try {
 
-  
+                    completedFolderObj = await app.vault.createFolder(completedFolder);
 
-                const fileContent = await app.vault.read(sourceFile);
+                } catch (error) {
 
-  
+                    completedFolderObj = app.vault.getAbstractFileByPath(completedFolder);
 
-            const lines = fileContent.split('\n');
+                    if (!completedFolderObj) {
 
-  
+                        throw new Error("Could not create or access Completed folder: " + error.message);
 
-            const today = new Date();
+                    }
 
-  
+                }
 
-            const month = String(today.getMonth() + 1).padStart(2, '0');
+            }
 
-  
+            
 
-            const day = String(today.getDate()).padStart(2, '0');
+            let completedFile = app.vault.getAbstractFileByPath(completedFilePath);
 
-  
+            
 
-            const year = today.getFullYear();
+            if (!completedFile) {
 
-  
+                completedFile = await app.vault.create(completedFilePath, "");
 
-            const dateString = `${month}-${day}-${year}`;
+            }
 
-  
+            
 
-            let currentLine = lines[entry.lineIndex].trim();
+            const completedContent = await app.vault.read(completedFile);
 
-  
+            
 
-            const taskText = currentLine.replace(/#[\w-]+/g, '').replace(/\([\w-]+\)/g, '').trim().replace(/\s+/g, ' ');
+            const newCompletedContent = completedContent.trim() + 
 
-  
+                (completedContent.trim() ? '\n' : '') + 
 
-            const completionTag = `#marked-as-complete-${dateString}`;
+                currentLine;
 
-  
+            
 
-            currentLine = taskText + ' ' + completionTag + ' #complete';
+            await app.vault.modify(completedFile, newCompletedContent);
 
-  
+            
 
-            lines[entry.lineIndex] = currentLine;
+            entry.isCompleted = true;
 
-  
+            entry.text = currentLine;
 
-            const newSourceContent = lines.join('\n');
+            renderTable();
 
-  
+            });
 
-            await app.vault.modify(sourceFile, newSourceContent);
+        }
 
-  
+        
 
-  
+    } catch (error) {
 
-            const completedFolder = "Completed";
+        console.error("Error updating file:", error);
 
-  
-
-            const completedFilePath = `${completedFolder}/Completed ${dateString}.md`;
-
-  
-
-  
-
-            let completedFolderObj = app.vault.getAbstractFileByPath(completedFolder);
-
-  
-
-            if (!completedFolderObj) {
-
-  
-
-                try {
-
-  
-
-                    completedFolderObj = await app.vault.createFolder(completedFolder);
-
-  
-
-                } catch (error) {
-
-  
-
-                    completedFolderObj = app.vault.getAbstractFileByPath(completedFolder);
-
-  
-
-                    if (!completedFolderObj) {
-
-  
-
-                        throw new Error("Could not create or access Completed folder: " + error.message);
-
-  
-
-                    }
-
-  
-
-                }
-
-  
-
-            }
-
-  
-
-  
-
-            let completedFile = app.vault.getAbstractFileByPath(completedFilePath);
-
-  
-
-  
-
-            if (!completedFile) {
-
-  
-
-                completedFile = await app.vault.create(completedFilePath, "");
-
-  
-
-            }
-
-  
-
-  
-
-            const completedContent = await app.vault.read(completedFile);
-
-  
-
-  
-
-            const newCompletedContent = completedContent.trim() +
-
-  
-
-                (completedContent.trim() ? '\n' : '') +
-
-  
-
-                currentLine;
-
-  
-
-  
-
-            await app.vault.modify(completedFile, newCompletedContent);
-
-  
-
-  
-
-            entry.isCompleted = true;
-
-  
-
-            entry.text = currentLine;
-
-  
-
-            renderTable();
-
-  
-
-            });
-
-  
-
-        }
-
-  
-
-  
-
-    } catch (error) {
-
-  
-
-        console.error("Error updating file:", error);
-
-  
-
-    }
-
-  
+    }
 
 }
-
-  
 
   
 
 async function archiveTask(entry) {
 
-  
+    try {
 
-    try {
+        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
 
-  
+        if (!sourceFile) {
 
-        const sourceFile = app.vault.getAbstractFileByPath(entry.filePath);
+            console.error("File not found:", entry.filePath);
 
-  
+            return;
 
-        if (!sourceFile) {
+        }
 
-  
+        
 
-            console.error("File not found:", entry.filePath);
+        const fileContent = await app.vault.read(sourceFile);
 
-  
+        const lines = fileContent.split('\n');
 
-            return;
+        
 
-  
+        const lineToArchive = lines[entry.lineIndex].trim();
 
-        }
+        
 
-  
+        lines.splice(entry.lineIndex, 1);
 
-  
+        const newSourceContent = lines.join('\n');
 
-        const fileContent = await app.vault.read(sourceFile);
+        await app.vault.modify(sourceFile, newSourceContent);
 
-  
+        
 
-        const lines = fileContent.split('\n');
+        const today = new Date();
 
-  
+        const month = String(today.getMonth() + 1).padStart(2, '0');
 
-  
+        const day = String(today.getDate()).padStart(2, '0');
 
-        const lineToArchive = lines[entry.lineIndex].trim();
+        const year = today.getFullYear();
 
-  
+        const dateString = `${month}-${day}-${year}`;
 
-  
+        const archiveFolder = "Archive";
 
-        lines.splice(entry.lineIndex, 1);
+        const archiveFilePath = `${archiveFolder}/Archive ${dateString}.md`;
 
-  
+        
 
-        const newSourceContent = lines.join('\n');
+        let archiveFolderObj = app.vault.getAbstractFileByPath(archiveFolder);
 
-  
+        if (!archiveFolderObj) {
 
-        await app.vault.modify(sourceFile, newSourceContent);
+            try {
 
-  
+                archiveFolderObj = await app.vault.createFolder(archiveFolder);
 
-  
+            } catch (error) {
 
-        const today = new Date();
+                archiveFolderObj = app.vault.getAbstractFileByPath(archiveFolder);
 
-  
+                if (!archiveFolderObj) {
 
-        const month = String(today.getMonth() + 1).padStart(2, '0');
+                    throw new Error("Could not create or access Archive folder: " + error.message);
 
-  
+                }
 
-        const day = String(today.getDate()).padStart(2, '0');
+            }
 
-  
+        }
 
-        const year = today.getFullYear();
+        
 
-  
+        let archiveFile = app.vault.getAbstractFileByPath(archiveFilePath);
 
-        const dateString = `${month}-${day}-${year}`;
+        
 
-  
+        if (!archiveFile) {
 
-        const archiveFolder = "Archive";
+            archiveFile = await app.vault.create(archiveFilePath, "");
 
-  
+        }
 
-        const archiveFilePath = `${archiveFolder}/Archive ${dateString}.md`;
+        
 
-  
+        const archiveContent = await app.vault.read(archiveFile);
 
-  
+        
 
-        let archiveFolderObj = app.vault.getAbstractFileByPath(archiveFolder);
+        const newArchiveContent = archiveContent.trim() + 
 
-  
+            (archiveContent.trim() ? '\n' : '') + 
 
-        if (!archiveFolderObj) {
+            lineToArchive;
 
-  
+        
 
-            try {
+        await app.vault.modify(archiveFile, newArchiveContent);
 
-  
+        
 
-                archiveFolderObj = await app.vault.createFolder(archiveFolder);
+        const entryIndex = entries.findIndex(e => 
 
-  
+            e.filePath === entry.filePath && 
 
-            } catch (error) {
+            e.lineIndex === entry.lineIndex
 
-  
+        );
 
-                archiveFolderObj = app.vault.getAbstractFileByPath(archiveFolder);
+        if (entryIndex !== -1) {
 
-  
+            entries.splice(entryIndex, 1);
 
-                if (!archiveFolderObj) {
+        }
 
-  
+        
 
-                    throw new Error("Could not create or access Archive folder: " + error.message);
+        renderTable();
 
-  
+        
 
-                }
+    } catch (error) {
 
-  
+        console.error("Error archiving task:", error);
 
-            }
-
-  
-
-        }
-
-  
-
-  
-
-        let archiveFile = app.vault.getAbstractFileByPath(archiveFilePath);
-
-  
-
-  
-
-        if (!archiveFile) {
-
-  
-
-            archiveFile = await app.vault.create(archiveFilePath, "");
-
-  
-
-        }
-
-  
-
-  
-
-        const archiveContent = await app.vault.read(archiveFile);
-
-  
-
-  
-
-        const newArchiveContent = archiveContent.trim() +
-
-  
-
-            (archiveContent.trim() ? '\n' : '') +
-
-  
-
-            lineToArchive;
-
-  
-
-  
-
-        await app.vault.modify(archiveFile, newArchiveContent);
-
-  
-
-  
-
-        const entryIndex = entries.findIndex(e =>
-
-  
-
-            e.filePath === entry.filePath &&
-
-  
-
-            e.lineIndex === entry.lineIndex
-
-  
-
-        );
-
-  
-
-        if (entryIndex !== -1) {
-
-  
-
-            entries.splice(entryIndex, 1);
-
-  
-
-        }
-
-  
-
-  
-
-        renderTable();
-
-  
-
-  
-
-    } catch (error) {
-
-  
-
-        console.error("Error archiving task:", error);
-
-  
-
-    }
-
-  
+    }
 
 }
-
-  
 
   
 
 function renderTable() {
 
-  
+    const tableContainer = document.getElementById(tagTableContainer);
+
+    if (!tableContainer) return;
+
+    
+
+    tableContainer.innerHTML = "";
+
+    
+
+    const keywordFilter = document.getElementById(tagTableContainer + "_keywordFilter");
+    const filterValue = keywordFilter ? keywordFilter.value.toLowerCase().trim() : "";
+    
+    let filteredEntries = entries;
+    if (filterValue) {
+        filteredEntries = entries.filter(entry => {
+            const hashTags = entry.text.match(/#[\w-]+/g) || [];
+            const parenTags = entry.text.match(/\([\w-]+\)/g) || [];
+            const allTags = [...hashTags, ...parenTags].map(tag => {
+                if (tag.startsWith('#')) {
+                    return tag.replace('#', '');
+                } else if (tag.startsWith('(') && tag.endsWith(')')) {
+                    return tag.replace(/^\(|\)$/g, '');
+                }
+                return tag;
+            }).join(" ");
+            
+            const taskText = entry.text.replace(/#[\w-]+/g, '').replace(/\([\w-]+\)/g, '').trim();
+            
+            const searchText = (
+                taskText + " " +
+                entry.document + " " +
+                allTags
+            ).toLowerCase();
+            return searchText.includes(filterValue);
+        });
+    }
+
+    if (filteredEntries.length === 0) {
+
+        tableContainer.innerHTML = "<p>No entries found.</p>";
+
+        return;
+
+    }
+
+    
+
+    const table = document.createElement("table");
+
+    table.style.width = "100%";
+
+    table.style.borderCollapse = "collapse";
+
+    
+
+    const thead = document.createElement("thead");
+
+    const headerRow = document.createElement("tr");
+
+    const columnHeaders = [
+        { key: COLUMN_KEYS.PRIORITY, label: "Priority" },
+        { key: COLUMN_KEYS.STATUS, label: "Status" },
+        { key: COLUMN_KEYS.TAG, label: "Tag" },
+        { key: COLUMN_KEYS.TASK, label: "Task" },
+        { key: COLUMN_KEYS.DOCUMENT, label: "Document" },
+        { key: COLUMN_KEYS.DUE_DATE, label: "Due Date" },
+        { key: COLUMN_KEYS.LAST_EDIT, label: "Last Edit" },
+        { key: COLUMN_KEYS.ARCHIVE, label: "Archive" }
+    ];
+
+    columnHeaders.forEach(({ key, label }) => {
+        if (columnVisibility[key]) {
+            const th = document.createElement("th");
+            th.style.border = "1px solid #ddd";
+            th.style.padding = "8px";
+            th.style.textAlign = "left";
+            th.style.backgroundColor = "#f2f2f2";
+            th.style.position = "relative";
+            
+            const headerContent = document.createElement("div");
+            headerContent.style.display = "flex";
+            headerContent.style.alignItems = "center";
+            headerContent.style.gap = "8px";
+            
+            const labelSpan = document.createElement("span");
+            labelSpan.textContent = label;
+            headerContent.appendChild(labelSpan);
+            
+            if (key === COLUMN_KEYS.PRIORITY) {
+                const sortButton = document.createElement("button");
+                sortButton.textContent = prioritySortDirection === "ascending" ? "↑" : "↓";
+                sortButton.style.padding = "2px 6px";
+                sortButton.style.cursor = "pointer";
+                sortButton.style.border = "1px solid #ccc";
+                sortButton.style.borderRadius = "3px";
+                sortButton.style.backgroundColor = "#f5f5f5";
+                sortButton.style.color = "#333";
+                sortButton.style.fontSize = "12px";
+                sortButton.style.minWidth = "24px";
+                sortButton.style.height = "20px";
+                sortButton.title = prioritySortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+                
+                sortButton.addEventListener("click", () => {
+                    prioritySortDirection = prioritySortDirection === "ascending" ? "descending" : "ascending";
+                    sortButton.textContent = prioritySortDirection === "ascending" ? "↑" : "↓";
+                    sortButton.title = prioritySortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+                    
+                    sortEntries();
+                    renderTable();
+                });
+                
+                headerContent.appendChild(sortButton);
+            }
+            
+            if (key === COLUMN_KEYS.DUE_DATE) {
+                const sortButton = document.createElement("button");
+                sortButton.textContent = dueDateSortDirection === "ascending" ? "↑" : "↓";
+                sortButton.style.padding = "2px 6px";
+                sortButton.style.cursor = "pointer";
+                sortButton.style.border = "1px solid #ccc";
+                sortButton.style.borderRadius = "3px";
+                sortButton.style.backgroundColor = "#f5f5f5";
+                sortButton.style.color = "#333";
+                sortButton.style.fontSize = "12px";
+                sortButton.style.minWidth = "24px";
+                sortButton.style.height = "20px";
+                sortButton.title = dueDateSortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+                
+                sortButton.addEventListener("click", () => {
+                    dueDateSortDirection = dueDateSortDirection === "ascending" ? "descending" : "ascending";
+                    sortButton.textContent = dueDateSortDirection === "ascending" ? "↑" : "↓";
+                    sortButton.title = dueDateSortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+                    
+                    sortEntries();
+                    renderTable();
+                });
+                
+                headerContent.appendChild(sortButton);
+            }
+            
+            th.appendChild(headerContent);
+            headerRow.appendChild(th);
+        }
+    });
 
-    const tableContainer = document.getElementById(tagTableContainer);
+    thead.appendChild(headerRow);
 
-  
+    table.appendChild(thead);
 
-    if (!tableContainer) return;
+    
 
-  
+    const tbody = document.createElement("tbody");
 
-  
+    filteredEntries.forEach((e, idx) => {
 
-    tableContainer.innerHTML = "";
+        const entry = e;
 
-  
+        const row = document.createElement("tr");
 
-  
+        if (e.dueDate) {
+            const daysUntilDue = getDaysUntilDueDate(e.dueDate);
+            if (daysUntilDue !== null) {
+                if (daysUntilDue === 1) {
+                    row.style.backgroundColor = "#ff0000";
+                    row.setAttribute("data-due-warning", "1-day");
+                    let isRed = true;
+                    setInterval(() => {
+                        const isDarkMode = getDarkMode();
+                        const flashColor = isDarkMode ? "#1e1e1e" : "#ffffff";
+                        row.style.backgroundColor = isRed ? flashColor : "#ff0000";
+                        isRed = !isRed;
+                    }, 500);
+                } else if (daysUntilDue === 2) {
+                    row.style.backgroundColor = "#ff8800";
+                    row.setAttribute("data-due-warning", "2-day");
+                }
+            }
+        }
 
-    const keywordFilter = document.getElementById(tagTableContainer + "_keywordFilter");
+        
 
-    const filterValue = keywordFilter ? keywordFilter.value.toLowerCase().trim() : "";
+        if (columnVisibility[COLUMN_KEYS.PRIORITY]) {
+            const cellPriority = document.createElement("td");
 
-    let filteredEntries = entries;
+            cellPriority.style.border = "1px solid #ddd";
 
-    if (filterValue) {
+            cellPriority.style.padding = "8px";
 
-        filteredEntries = entries.filter(entry => {
+            const prioritySelect = document.createElement("select");
 
-            const hashTags = entry.text.match(/#[\w-]+/g) || [];
+            prioritySelect.style.padding = "5px";
 
-            const parenTags = entry.text.match(/\([\w-]+\)/g) || [];
+            prioritySelect.style.border = "1px solid #ccc";
 
-            const allTags = [...hashTags, ...parenTags].map(tag => {
+            prioritySelect.style.borderRadius = "4px";
 
-                if (tag.startsWith('#')) {
+            prioritySelect.style.cursor = "pointer";
 
-                    return tag.replace('#', '');
+            prioritySelect.style.width = "100%";
 
-                } else if (tag.startsWith('(') && tag.endsWith(')')) {
+            if (e.priority) {
 
-                    return tag.replace(/^\(|\)$/g, '');
+                prioritySelect.style.backgroundColor = getPriorityColor(e.priority);
 
-                }
+                prioritySelect.style.color = "#000000";
 
-                return tag;
+            }
 
-            }).join(" ");
+            
 
-            const taskText = entry.text.replace(/#[\w-]+/g, '').replace(/\([\w-]+\)/g, '').trim();
+            const emptyOption = document.createElement("option");
 
-            const searchText = (
+            emptyOption.value = "";
 
-                taskText + " " +
+            emptyOption.textContent = "-";
 
-                entry.document + " " +
+            prioritySelect.appendChild(emptyOption);
 
-                allTags
+            for (let i = 1; i <= 5; i++) {
 
-            ).toLowerCase();
+                const option = document.createElement("option");
 
-            return searchText.includes(filterValue);
+                option.value = i.toString();
 
-        });
+                option.textContent = i.toString();
 
-    }
+                if (e.priority === i) {
 
-  
+                    option.selected = true;
 
-    if (filteredEntries.length === 0) {
+                }
 
-  
+                prioritySelect.appendChild(option);
 
-        tableContainer.innerHTML = "<p>No entries found.</p>";
+            }
 
-  
+            prioritySelect.addEventListener("change", async () => {
 
-        return;
+                const selectedPriority = prioritySelect.value;
 
-  
+                if (selectedPriority && selectedPriority !== "") {
 
-    }
+                    prioritySelect.style.backgroundColor = getPriorityColor(selectedPriority);
 
-  
+                    prioritySelect.style.color = "#000000";
 
-  
+                } else {
 
-    const table = document.createElement("table");
+                    prioritySelect.style.backgroundColor = "#ffffff";
 
-  
+                    prioritySelect.style.color = "#000000";
 
-    table.style.width = "100%";
+                }
 
-  
+                
 
-    table.style.borderCollapse = "collapse";
+                await updatePriority(entry, prioritySelect.value);
 
-  
+            });
 
-  
+            cellPriority.appendChild(prioritySelect);
 
-    const thead = document.createElement("thead");
+            row.appendChild(cellPriority);
+        }
 
-  
+        
 
-    const headerRow = document.createElement("tr");
+        if (columnVisibility[COLUMN_KEYS.STATUS]) {
+            const cell0 = document.createElement("td");
 
-  
+            cell0.style.border = "1px solid #ddd";
 
-    const columnHeaders = [
+            cell0.style.padding = "8px";
 
-        { key: COLUMN_KEYS.PRIORITY, label: "Priority" },
+            const button = document.createElement("button");
 
-        { key: COLUMN_KEYS.STATUS, label: "Status" },
+            button.textContent = e.isCompleted ? "Completed" : "In Progress";
 
-        { key: COLUMN_KEYS.TAG, label: "Tag" },
+            button.style.padding = "5px 10px";
 
-        { key: COLUMN_KEYS.TASK, label: "Task" },
+            button.style.cursor = "pointer";
 
-        { key: COLUMN_KEYS.DOCUMENT, label: "Document" },
+            button.style.border = "1px solid #ccc";
 
-        { key: COLUMN_KEYS.DUE_DATE, label: "Due Date" },
+            button.style.borderRadius = "4px";
 
-        { key: COLUMN_KEYS.LAST_EDIT, label: "Last Edit" },
+            button.style.backgroundColor = e.isCompleted ? "#4CAF50" : "#FF9800";
 
-        { key: COLUMN_KEYS.ARCHIVE, label: "Archive" }
+            button.style.color = "white";
 
-    ];
+            button.addEventListener("click", () => toggleComplete(e));
 
-  
+            cell0.appendChild(button);
 
-    columnHeaders.forEach(({ key, label }) => {
+            row.appendChild(cell0);
+        }
 
-        if (columnVisibility[key]) {
+        
 
-            const th = document.createElement("th");
+        if (columnVisibility[COLUMN_KEYS.TAG]) {
+            const cell1 = document.createElement("td");
 
-            th.style.border = "1px solid #ddd";
+            const hashTags = e.text.match(/#[\w-]+/g) || [];
+            const parenTags = e.text.match(/\([\w-]+\)/g) || [];
+            
+            const allTags = [...hashTags, ...parenTags];
 
-            th.style.padding = "8px";
+            const tagsWithoutPriority = allTags.filter(tag => {
+                const tagLower = tag.toLowerCase();
+                return !tagLower.includes('priority') && !tagLower.includes('due-date') && !tagLower.includes('due date');
+            });
 
-            th.style.textAlign = "left";
+            const tagsForDisplay = tagsWithoutPriority.map(tag => {
+                if (tag.startsWith('#')) {
+                    return tag.replace('#', '');
+                } else if (tag.startsWith('(') && tag.endsWith(')')) {
+                    return tag.replace(/^\(|\)$/g, '');
+                }
+                return tag;
+            });
 
-            th.style.backgroundColor = "#f2f2f2";
+            cell1.textContent = tagsForDisplay.join(' | ');
 
-            th.style.position = "relative";
+            cell1.style.border = "1px solid #ddd";
 
-            const headerContent = document.createElement("div");
+            cell1.style.padding = "8px";
 
-            headerContent.style.display = "flex";
+            row.appendChild(cell1);
+        }
 
-            headerContent.style.alignItems = "center";
+        
 
-            headerContent.style.gap = "8px";
+        if (columnVisibility[COLUMN_KEYS.TASK]) {
+            const cell2 = document.createElement("td");
 
-            const labelSpan = document.createElement("span");
+            const taskText = e.text.replace(/#[\w-]+/g, '').replace(/\([\w-]+\)/g, '').trim().replace(/\s+/g, ' ');
 
-            labelSpan.textContent = label;
+            cell2.textContent = taskText;
 
-            headerContent.appendChild(labelSpan);
+            cell2.style.border = "1px solid #ddd";
 
-            if (key === COLUMN_KEYS.PRIORITY) {
+            cell2.style.padding = "8px";
 
-                const sortButton = document.createElement("button");
+            row.appendChild(cell2);
+        }
 
-                sortButton.textContent = prioritySortDirection === "ascending" ? "↑" : "↓";
+        
 
-                sortButton.style.padding = "2px 6px";
+        if (columnVisibility[COLUMN_KEYS.DOCUMENT]) {
+            const cell3 = document.createElement("td");
 
-                sortButton.style.cursor = "pointer";
+            cell3.style.border = "1px solid #ddd";
 
-                sortButton.style.border = "1px solid #ccc";
+            cell3.style.padding = "8px";
 
-                sortButton.style.borderRadius = "3px";
+            const docLink = document.createElement("a");
 
-                sortButton.style.backgroundColor = "#f5f5f5";
+            docLink.textContent = e.document;
 
-                sortButton.style.color = "#333";
+            docLink.style.cursor = "pointer";
 
-                sortButton.style.fontSize = "12px";
+            docLink.style.color = "#4A90E2";
 
-                sortButton.style.minWidth = "24px";
+            docLink.style.textDecoration = "underline";
 
-                sortButton.style.height = "20px";
+            const filePath = e.filePath;
 
-                sortButton.title = prioritySortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+            docLink.addEventListener("click", async (event) => {
 
-                sortButton.addEventListener("click", () => {
+                event.preventDefault();
 
-                    prioritySortDirection = prioritySortDirection === "ascending" ? "descending" : "ascending";
+                try {
 
-                    sortButton.textContent = prioritySortDirection === "ascending" ? "↑" : "↓";
+                    const file = app.vault.getAbstractFileByPath(filePath);
 
-                    sortButton.title = prioritySortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+                    if (file) {
 
-                    sortEntries();
+                        const leaf = app.workspace.getLeaf();
 
-                    renderTable();
+                        await leaf.openFile(file);
 
-                });
+                    }
 
-                headerContent.appendChild(sortButton);
+                } catch (error) {
 
-            }
+                    console.error("Error opening document:", error);
 
-            if (key === COLUMN_KEYS.DUE_DATE) {
+                }
 
-                const sortButton = document.createElement("button");
+            });
 
-                sortButton.textContent = dueDateSortDirection === "ascending" ? "↑" : "↓";
+            cell3.appendChild(docLink);
 
-                sortButton.style.padding = "2px 6px";
+            row.appendChild(cell3);
+        }
 
-                sortButton.style.cursor = "pointer";
+        
 
-                sortButton.style.border = "1px solid #ccc";
+        if (columnVisibility[COLUMN_KEYS.DUE_DATE]) {
+            const cellDueDate = document.createElement("td");
 
-                sortButton.style.borderRadius = "3px";
+            cellDueDate.style.border = "1px solid #ddd";
 
-                sortButton.style.backgroundColor = "#f5f5f5";
+            cellDueDate.style.padding = "8px";
 
-                sortButton.style.color = "#333";
+            const dueDateInput = document.createElement("input");
 
-                sortButton.style.fontSize = "12px";
+            dueDateInput.type = "date";
 
-                sortButton.style.minWidth = "24px";
+            dueDateInput.style.padding = "5px";
+            dueDateInput.style.border = "1px solid #ccc";
+            dueDateInput.style.borderRadius = "4px";
+            dueDateInput.style.width = "100%";
+            dueDateInput.style.cursor = "pointer";
+            dueDateInput.style.boxSizing = "border-box";
+            dueDateInput.style.textAlign = "right";
+            
+            cellDueDate.appendChild(dueDateInput);
 
-                sortButton.style.height = "20px";
+            let dueDateValue = e.dueDate || calculateDefaultDueDate();
 
-                sortButton.title = dueDateSortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+            if (dueDateValue) {
 
-                sortButton.addEventListener("click", () => {
+                const [month, day, year] = dueDateValue.split('-');
 
-                    dueDateSortDirection = dueDateSortDirection === "ascending" ? "descending" : "ascending";
+                dueDateInput.value = `${year}-${month}-${day}`;
 
-                    sortButton.textContent = dueDateSortDirection === "ascending" ? "↑" : "↓";
+            } else {
 
-                    sortButton.title = dueDateSortDirection === "ascending" ? "Sort Descending" : "Sort Ascending";
+                const defaultDueDate = calculateDefaultDueDate();
 
-                    sortEntries();
+                const [month, day, year] = defaultDueDate.split('-');
 
-                    renderTable();
+                dueDateInput.value = `${year}-${month}-${day}`;
 
-                });
+            }
 
-                headerContent.appendChild(sortButton);
+            
 
-            }
+            dueDateInput.addEventListener("change", async () => {
 
-            th.appendChild(headerContent);
+                const selectedDate = dueDateInput.value;
 
-            headerRow.appendChild(th);
+                if (selectedDate) {
 
-        }
+                    const [year, month, day] = selectedDate.split('-');
 
-    });
+                    const formattedDate = `${month}-${day}-${year}`;
 
-  
+                    await updateDueDate(entry, formattedDate);
 
-    thead.appendChild(headerRow);
+                }
 
-  
+            });
 
-    table.appendChild(thead);
+            row.appendChild(cellDueDate);
+        }
 
-  
+        
 
-  
+        if (columnVisibility[COLUMN_KEYS.LAST_EDIT]) {
+            const cell4 = document.createElement("td");
 
-    const tbody = document.createElement("tbody");
+            cell4.textContent = e.lastEdit.toFormat("yyyy-MM-dd HH:mm");
 
-  
+            cell4.style.border = "1px solid #ddd";
 
-    filteredEntries.forEach((e, idx) => {
+            cell4.style.padding = "8px";
 
-  
+            row.appendChild(cell4);
+        }
 
-        const entry = e;
+        
 
-  
+        if (columnVisibility[COLUMN_KEYS.ARCHIVE]) {
+            const cellArchive = document.createElement("td");
 
-        const row = document.createElement("tr");
+            cellArchive.style.border = "1px solid #ddd";
 
-  
+            cellArchive.style.padding = "8px";
 
-        if (e.dueDate) {
+            const archiveButton = document.createElement("button");
 
-            const daysUntilDue = getDaysUntilDueDate(e.dueDate);
+            archiveButton.textContent = "Archive";
 
-            if (daysUntilDue !== null) {
+            archiveButton.style.padding = "5px 10px";
 
-                if (daysUntilDue === 1) {
+            archiveButton.style.cursor = "pointer";
 
-                    row.style.backgroundColor = "#ff0000";
+            archiveButton.style.border = "1px solid #ccc";
 
-                    row.setAttribute("data-due-warning", "1-day");
+            archiveButton.style.borderRadius = "4px";
 
-                    let isRed = true;
+            archiveButton.style.backgroundColor = "#9E9E9E";
 
-                    setInterval(() => {
+            archiveButton.style.color = "white";
 
-                        const isDarkMode = getDarkMode();
+            archiveButton.addEventListener("click", () => archiveTask(e));
 
-                        const flashColor = isDarkMode ? "#1e1e1e" : "#ffffff";
+            cellArchive.appendChild(archiveButton);
 
-                        row.style.backgroundColor = isRed ? flashColor : "#ff0000";
+            row.appendChild(cellArchive);
+        }
 
-                        isRed = !isRed;
+        
 
-                    }, 500);
+        tbody.appendChild(row);
 
-                } else if (daysUntilDue === 2) {
+    });
 
-                    row.style.backgroundColor = "#ff8800";
+    table.appendChild(tbody);
 
-                    row.setAttribute("data-due-warning", "2-day");
-
-                }
-
-            }
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.PRIORITY]) {
-
-            const cellPriority = document.createElement("td");
-
-  
-
-            cellPriority.style.border = "1px solid #ddd";
-
-  
-
-            cellPriority.style.padding = "8px";
-
-  
-
-            const prioritySelect = document.createElement("select");
-
-  
-
-            prioritySelect.style.padding = "5px";
-
-  
-
-            prioritySelect.style.border = "1px solid #ccc";
-
-  
-
-            prioritySelect.style.borderRadius = "4px";
-
-  
-
-            prioritySelect.style.cursor = "pointer";
-
-  
-
-            prioritySelect.style.width = "100%";
-
-  
-
-            if (e.priority) {
-
-  
-
-                prioritySelect.style.backgroundColor = getPriorityColor(e.priority);
-
-  
-
-                prioritySelect.style.color = "#000000";
-
-  
-
-            }
-
-  
-
-  
-
-            const emptyOption = document.createElement("option");
-
-  
-
-            emptyOption.value = "";
-
-  
-
-            emptyOption.textContent = "-";
-
-  
-
-            prioritySelect.appendChild(emptyOption);
-
-  
-
-            for (let i = 1; i <= 5; i++) {
-
-  
-
-                const option = document.createElement("option");
-
-  
-
-                option.value = i.toString();
-
-  
-
-                option.textContent = i.toString();
-
-  
-
-                if (e.priority === i) {
-
-  
-
-                    option.selected = true;
-
-  
-
-                }
-
-  
-
-                prioritySelect.appendChild(option);
-
-  
-
-            }
-
-  
-
-            prioritySelect.addEventListener("change", async () => {
-
-  
-
-                const selectedPriority = prioritySelect.value;
-
-  
-
-                if (selectedPriority && selectedPriority !== "") {
-
-  
-
-                    prioritySelect.style.backgroundColor = getPriorityColor(selectedPriority);
-
-  
-
-                    prioritySelect.style.color = "#000000";
-
-  
-
-                } else {
-
-  
-
-                    prioritySelect.style.backgroundColor = "#ffffff";
-
-  
-
-                    prioritySelect.style.color = "#000000";
-
-  
-
-                }
-
-  
-
-  
-
-                await updatePriority(entry, prioritySelect.value);
-
-  
-
-            });
-
-  
-
-            cellPriority.appendChild(prioritySelect);
-
-  
-
-            row.appendChild(cellPriority);
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.STATUS]) {
-
-            const cell0 = document.createElement("td");
-
-  
-
-            cell0.style.border = "1px solid #ddd";
-
-  
-
-            cell0.style.padding = "8px";
-
-  
-
-            const button = document.createElement("button");
-
-  
-
-            button.textContent = e.isCompleted ? "Completed" : "In Progress";
-
-  
-
-            button.style.padding = "5px 10px";
-
-  
-
-            button.style.cursor = "pointer";
-
-  
-
-            button.style.border = "1px solid #ccc";
-
-  
-
-            button.style.borderRadius = "4px";
-
-  
-
-            button.style.backgroundColor = e.isCompleted ? "#4CAF50" : "#FF9800";
-
-  
-
-            button.style.color = "white";
-
-  
-
-            button.addEventListener("click", () => toggleComplete(e));
-
-  
-
-            cell0.appendChild(button);
-
-  
-
-            row.appendChild(cell0);
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.TAG]) {
-
-            const cell1 = document.createElement("td");
-
-  
-
-            const hashTags = e.text.match(/#[\w-]+/g) || [];
-
-            const parenTags = e.text.match(/\([\w-]+\)/g) || [];
-
-            const allTags = [...hashTags, ...parenTags];
-
-  
-
-            const tagsWithoutPriority = allTags.filter(tag => {
-
-                const tagLower = tag.toLowerCase();
-
-                return !tagLower.includes('priority') && !tagLower.includes('due-date') && !tagLower.includes('due date');
-
-            });
-
-  
-
-            const tagsForDisplay = tagsWithoutPriority.map(tag => {
-
-                if (tag.startsWith('#')) {
-
-                    return tag.replace('#', '');
-
-                } else if (tag.startsWith('(') && tag.endsWith(')')) {
-
-                    return tag.replace(/^\(|\)$/g, '');
-
-                }
-
-                return tag;
-
-            });
-
-  
-
-            cell1.textContent = tagsForDisplay.join(' | ');
-
-  
-
-            cell1.style.border = "1px solid #ddd";
-
-  
-
-            cell1.style.padding = "8px";
-
-  
-
-            row.appendChild(cell1);
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.TASK]) {
-
-            const cell2 = document.createElement("td");
-
-  
-
-            const taskText = e.text.replace(/#[\w-]+/g, '').replace(/\([\w-]+\)/g, '').trim().replace(/\s+/g, ' ');
-
-  
-
-            cell2.textContent = taskText;
-
-  
-
-            cell2.style.border = "1px solid #ddd";
-
-  
-
-            cell2.style.padding = "8px";
-
-  
-
-            row.appendChild(cell2);
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.DOCUMENT]) {
-
-            const cell3 = document.createElement("td");
-
-  
-
-            cell3.style.border = "1px solid #ddd";
-
-  
-
-            cell3.style.padding = "8px";
-
-  
-
-            const docLink = document.createElement("a");
-
-  
-
-            docLink.textContent = e.document;
-
-  
-
-            docLink.style.cursor = "pointer";
-
-  
-
-            docLink.style.color = "#4A90E2";
-
-  
-
-            docLink.style.textDecoration = "underline";
-
-  
-
-            const filePath = e.filePath;
-
-  
-
-            docLink.addEventListener("click", async (event) => {
-
-  
-
-                event.preventDefault();
-
-  
-
-                try {
-
-  
-
-                    const file = app.vault.getAbstractFileByPath(filePath);
-
-  
-
-                    if (file) {
-
-  
-
-                        const leaf = app.workspace.getLeaf();
-
-  
-
-                        await leaf.openFile(file);
-
-  
-
-                    }
-
-  
-
-                } catch (error) {
-
-  
-
-                    console.error("Error opening document:", error);
-
-  
-
-                }
-
-  
-
-            });
-
-  
-
-            cell3.appendChild(docLink);
-
-  
-
-            row.appendChild(cell3);
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.DUE_DATE]) {
-
-            const cellDueDate = document.createElement("td");
-
-  
-
-            cellDueDate.style.border = "1px solid #ddd";
-
-  
-
-            cellDueDate.style.padding = "8px";
-
-  
-
-            const dueDateInput = document.createElement("input");
-
-  
-
-            dueDateInput.type = "date";
-
-  
-
-            dueDateInput.style.padding = "5px";
-
-            dueDateInput.style.border = "1px solid #ccc";
-
-            dueDateInput.style.borderRadius = "4px";
-
-            dueDateInput.style.width = "100%";
-
-            dueDateInput.style.cursor = "pointer";
-
-            dueDateInput.style.boxSizing = "border-box";
-
-            dueDateInput.style.textAlign = "right";
-
-            cellDueDate.appendChild(dueDateInput);
-
-  
-
-            let dueDateValue = e.dueDate || calculateDefaultDueDate();
-
-  
-
-            if (dueDateValue) {
-
-  
-
-                const [month, day, year] = dueDateValue.split('-');
-
-  
-
-                dueDateInput.value = `${year}-${month}-${day}`;
-
-  
-
-            } else {
-
-  
-
-                const defaultDueDate = calculateDefaultDueDate();
-
-  
-
-                const [month, day, year] = defaultDueDate.split('-');
-
-  
-
-                dueDateInput.value = `${year}-${month}-${day}`;
-
-  
-
-            }
-
-  
-
-  
-
-            dueDateInput.addEventListener("change", async () => {
-
-  
-
-                const selectedDate = dueDateInput.value;
-
-  
-
-                if (selectedDate) {
-
-  
-
-                    const [year, month, day] = selectedDate.split('-');
-
-  
-
-                    const formattedDate = `${month}-${day}-${year}`;
-
-  
-
-                    await updateDueDate(entry, formattedDate);
-
-  
-
-                }
-
-  
-
-            });
-
-  
-
-            row.appendChild(cellDueDate);
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.LAST_EDIT]) {
-
-            const cell4 = document.createElement("td");
-
-  
-
-            cell4.textContent = e.lastEdit.toFormat("yyyy-MM-dd HH:mm");
-
-  
-
-            cell4.style.border = "1px solid #ddd";
-
-  
-
-            cell4.style.padding = "8px";
-
-  
-
-            row.appendChild(cell4);
-
-        }
-
-  
-
-  
-
-        if (columnVisibility[COLUMN_KEYS.ARCHIVE]) {
-
-            const cellArchive = document.createElement("td");
-
-  
-
-            cellArchive.style.border = "1px solid #ddd";
-
-  
-
-            cellArchive.style.padding = "8px";
-
-  
-
-            const archiveButton = document.createElement("button");
-
-  
-
-            archiveButton.textContent = "Archive";
-
-  
-
-            archiveButton.style.padding = "5px 10px";
-
-  
-
-            archiveButton.style.cursor = "pointer";
-
-  
-
-            archiveButton.style.border = "1px solid #ccc";
-
-  
-
-            archiveButton.style.borderRadius = "4px";
-
-  
-
-            archiveButton.style.backgroundColor = "#9E9E9E";
-
-  
-
-            archiveButton.style.color = "white";
-
-  
-
-            archiveButton.addEventListener("click", () => archiveTask(e));
-
-  
-
-            cellArchive.appendChild(archiveButton);
-
-  
-
-            row.appendChild(cellArchive);
-
-        }
-
-  
-
-  
-
-        tbody.appendChild(row);
-
-  
-
-    });
-
-  
-
-    table.appendChild(tbody);
-
-  
-
-    tableContainer.appendChild(table);
-
-    if (!isLogicTemplate && getDarkMode()) {
-
-        setTimeout(() => {
-
-            applyDarkMode(true);
-
-        }, 10);
-
-    }
-
-  
+    tableContainer.appendChild(table);
+    
+    if (!isLogicTemplate && getDarkMode()) {
+        setTimeout(() => {
+            applyDarkMode(true);
+        }, 10);
+    }
 
 }
-
-  
 
   
 
 const COLUMN_KEYS = {
-
-    PRIORITY: "priority",
-
-    STATUS: "status",
-
-    TAG: "tag",
-
-    TASK: "task",
-
-    DOCUMENT: "document",
-
-    DUE_DATE: "dueDate",
-
-    LAST_EDIT: "lastEdit",
-
-    ARCHIVE: "archive"
-
+    PRIORITY: "priority",
+    STATUS: "status",
+    TAG: "tag",
+    TASK: "task",
+    DOCUMENT: "document",
+    DUE_DATE: "dueDate",
+    LAST_EDIT: "lastEdit",
+    ARCHIVE: "archive"
 };
 
-  
-
 function getColumnVisibility() {
-
-    const stored = localStorage.getItem(`columnVisibility_${tagName}`);
-
-    if (stored) {
-
-        return JSON.parse(stored);
-
-    }
-
-    return {
-
-        [COLUMN_KEYS.PRIORITY]: true,
-
-        [COLUMN_KEYS.STATUS]: true,
-
-        [COLUMN_KEYS.TAG]: true,
-
-        [COLUMN_KEYS.TASK]: true,
-
-        [COLUMN_KEYS.DOCUMENT]: true,
-
-        [COLUMN_KEYS.DUE_DATE]: true,
-
-        [COLUMN_KEYS.LAST_EDIT]: true,
-
-        [COLUMN_KEYS.ARCHIVE]: true
-
-    };
-
+    const stored = localStorage.getItem(`columnVisibility_${tagName}`);
+    if (stored) {
+        return JSON.parse(stored);
+    }
+    return {
+        [COLUMN_KEYS.PRIORITY]: true,
+        [COLUMN_KEYS.STATUS]: true,
+        [COLUMN_KEYS.TAG]: true,
+        [COLUMN_KEYS.TASK]: true,
+        [COLUMN_KEYS.DOCUMENT]: true,
+        [COLUMN_KEYS.DUE_DATE]: true,
+        [COLUMN_KEYS.LAST_EDIT]: true,
+        [COLUMN_KEYS.ARCHIVE]: true
+    };
 }
-
-  
 
 function saveColumnVisibility(visibility) {
-
-    localStorage.setItem(`columnVisibility_${tagName}`, JSON.stringify(visibility));
-
+    localStorage.setItem(`columnVisibility_${tagName}`, JSON.stringify(visibility));
 }
-
-  
 
 function getDarkMode() {
-
-    const stored = localStorage.getItem(`darkMode_${tagName}`);
-
-    return stored === "true";
-
+    const stored = localStorage.getItem(`darkMode_${tagName}`);
+    return stored === "true";
 }
-
-  
 
 function saveDarkMode(enabled) {
-
-    localStorage.setItem(`darkMode_${tagName}`, enabled.toString());
-
+    localStorage.setItem(`darkMode_${tagName}`, enabled.toString());
 }
-
-  
 
 function applyDarkMode(enabled) {
-
-    const container = dv.container;
-
-    if (!container) return;
-
-    const headerContainer = container.querySelector(`[id="${tagTableContainer}_settings"]`)?.parentElement;
-
-    const tableContainerEl = document.getElementById(tagTableContainer);
-
-    if (enabled) {
-
-        if (headerContainer) {
-
-            headerContainer.style.backgroundColor = "";
-
-            headerContainer.style.color = "";
-
-        }
-
-        if (tableContainerEl) {
-
-            tableContainerEl.style.backgroundColor = "#1e1e1e";
-
-            tableContainerEl.style.color = "#d4d4d4";
-
-            tableContainerEl.style.padding = "20px";
-
-            tableContainerEl.style.margin = "-20px 0 0 0";
-
-            tableContainerEl.style.borderRadius = "4px";
-
-        } else {
-
-            container.style.backgroundColor = "#1e1e1e";
-
-            container.style.color = "#d4d4d4";
-
-            container.style.minHeight = "100vh";
-
-            container.style.padding = "20px";
-
-            container.style.margin = "-20px";
-
-        }
-
-        const tables = container.querySelectorAll("table");
-
-        tables.forEach(table => {
-
-            table.style.backgroundColor = "#252526";
-
-            table.style.color = "#d4d4d4";
-
-            const headers = table.querySelectorAll("th");
-
-            headers.forEach(th => {
-
-                th.style.backgroundColor = "#2d2d30";
-
-                th.style.color = "#d4d4d4";
-
-                th.style.borderColor = "#3e3e42";
-
-            });
-
-            const cells = table.querySelectorAll("td");
-
-            cells.forEach(td => {
-
-                const row = td.parentElement;
-
-                const warningType = row ? row.getAttribute("data-due-warning") : null;
-
-                if (warningType === "1-day") {
-
-                    td.style.backgroundColor = "transparent";
-
-                    td.style.color = "#ffffff";
-
-                } else if (warningType === "2-day") {
-
-                    td.style.backgroundColor = "#cc6600";
-
-                    td.style.color = "#ffffff";
-
-                } else {
-
-                    td.style.backgroundColor = "#252526";
-
-                    td.style.color = "#d4d4d4";
-
-                }
-
-                td.style.borderColor = "#3e3e42";
-
-            });
-
-        });
-
-        const buttons = container.querySelectorAll("button");
-
-        buttons.forEach(button => {
-
-            const buttonText = button.textContent.trim();
-
-            const isSortButton = buttonText === "↑" || buttonText === "↓";
-
-            const buttonBg = window.getComputedStyle(button).backgroundColor;
-
-            const hasSpecialColor = buttonBg &&
-
-                buttonBg !== "rgba(0, 0, 0, 0)" &&
-
-                buttonBg !== "transparent" &&
-
-                buttonBg !== "rgb(245, 245, 245)" &&
-
-                buttonBg !== "rgb(62, 62, 66)";
-
-            if (isSortButton) {
-
-                button.style.backgroundColor = "#3e3e42";
-
-                button.style.color = "#d4d4d4";
-
-                button.style.borderColor = "#555";
-
-            } else if (!hasSpecialColor && (!button.style.backgroundColor || button.style.backgroundColor === "rgb(245, 245, 245)")) {
-
-                button.style.backgroundColor = "#3e3e42";
-
-                button.style.color = "#d4d4d4";
-
-                button.style.borderColor = "#555";
-
-            }
-
-        });
-
-        const inputs = container.querySelectorAll("input, select");
-
-        inputs.forEach(input => {
-
-            const isKeywordFilter = input.id && input.id.includes("_keywordFilter");
-
-            if (isKeywordFilter) {
-
-                input.style.backgroundColor = "#3e3e42";
-
-                input.style.color = "#d4d4d4";
-
-                input.style.borderColor = "#555";
-
-            } else {
-
-                const currentBg = window.getComputedStyle(input).backgroundColor;
-
-                const isPrioritySelect = input.tagName === "SELECT" &&
-
-                    currentBg &&
-
-                    currentBg !== "rgba(0, 0, 0, 0)" &&
-
-                    currentBg !== "transparent" &&
-
-                    currentBg !== "rgb(62, 62, 66)" &&
-
-                    currentBg !== "rgb(255, 255, 255)";
-
-                if (isPrioritySelect) {
-
-                    const rgb = currentBg.match(/\d+/g);
-
-                    if (rgb && rgb.length >= 3) {
-
-                        const r = parseInt(rgb[0]);
-
-                        const g = parseInt(rgb[1]);
-
-                        const b = parseInt(rgb[2]);
-
-                        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-                        input.style.color = brightness > 128 ? "#000000" : "#ffffff";
-
-                    }
-
-                } else {
-
-                    input.style.backgroundColor = "#3e3e42";
-
-                    input.style.color = "#d4d4d4";
-
-                    input.style.borderColor = "#555";
-
-                }
-
-            }
-
-        });
-
-        if (settingsMenu) {
-
-            settingsMenu.style.backgroundColor = "#252526";
-
-            settingsMenu.style.color = "#d4d4d4";
-
-            settingsMenu.style.borderColor = "#3e3e42";
-
-        }
-
-        const filterLabel = container.querySelector(`label[for="${tagTableContainer}_keywordFilter"]`);
-
-        if (filterLabel) {
-
-            filterLabel.style.color = "#d4d4d4";
-
-        }
-
-    } else {
-
-        const tableContainerEl = document.getElementById(tagTableContainer);
-
-        if (tableContainerEl) {
-
-            tableContainerEl.style.backgroundColor = "";
-
-            tableContainerEl.style.color = "";
-
-            tableContainerEl.style.padding = "";
-
-            tableContainerEl.style.margin = "";
-
-            tableContainerEl.style.borderRadius = "";
-
-        } else {
-
-            container.style.backgroundColor = "";
-
-            container.style.color = "";
-
-            container.style.minHeight = "";
-
-            container.style.padding = "";
-
-            container.style.margin = "";
-
-        }
-
-        const tables = container.querySelectorAll("table");
-
-        tables.forEach(table => {
-
-            table.style.backgroundColor = "";
-
-            table.style.color = "";
-
-            const headers = table.querySelectorAll("th");
-
-            headers.forEach(th => {
-
-                th.style.backgroundColor = "#f2f2f2";
-
-                th.style.color = "";
-
-                th.style.borderColor = "#ddd";
-
-            });
-
-            const cells = table.querySelectorAll("td");
-
-            cells.forEach(td => {
-
-                td.style.backgroundColor = "";
-
-                td.style.color = "";
-
-                td.style.borderColor = "#ddd";
-
-            });
-
-        });
-
-        const buttons = container.querySelectorAll("button");
-
-        buttons.forEach(button => {
-
-            if (button.style.backgroundColor === "rgb(62, 62, 66)") {
-
-                button.style.backgroundColor = "";
-
-                button.style.color = "";
-
-                button.style.borderColor = "";
-
-            }
-
-        });
-
-        const inputs = container.querySelectorAll("input, select");
-
-        inputs.forEach(input => {
-
-            const isKeywordFilter = input.id && input.id.includes("_keywordFilter");
-
-            if (isKeywordFilter) {
-
-                input.style.backgroundColor = "";
-
-                input.style.color = "";
-
-                input.style.borderColor = "";
-
-            } else {
-
-                const currentBg = window.getComputedStyle(input).backgroundColor;
-
-                const isPrioritySelect = input.tagName === "SELECT" &&
-
-                    currentBg &&
-
-                    currentBg !== "rgba(0, 0, 0, 0)" &&
-
-                    currentBg !== "transparent" &&
-
-                    currentBg !== "rgb(62, 62, 66)" &&
-
-                    currentBg !== "rgb(255, 255, 255)";
-
-                if (!isPrioritySelect) {
-
-                    input.style.backgroundColor = "";
-
-                    input.style.color = "";
-
-                    input.style.borderColor = "";
-
-                } else {
-
-                    input.style.color = "#000000";
-
-                }
-
-            }
-
-        });
-
-        if (settingsMenu) {
-
-            settingsMenu.style.backgroundColor = "#ffffff";
-
-            settingsMenu.style.color = "";
-
-            settingsMenu.style.borderColor = "#ccc";
-
-        }
-
-        const filterLabel = container.querySelector(`label[for="${tagTableContainer}_keywordFilter"]`);
-
-        if (filterLabel) {
-
-            filterLabel.style.color = "";
-
-        }
-
-    }
-
+    const container = dv.container;
+    if (!container) return;
+    
+    const headerContainer = container.querySelector(`[id="${tagTableContainer}_settings"]`)?.parentElement;
+    const tableContainerEl = document.getElementById(tagTableContainer);
+    
+    if (enabled) {
+        if (headerContainer) {
+            headerContainer.style.backgroundColor = "";
+            headerContainer.style.color = "";
+        }
+        
+        if (tableContainerEl) {
+            tableContainerEl.style.backgroundColor = "#1e1e1e";
+            tableContainerEl.style.color = "#d4d4d4";
+            tableContainerEl.style.padding = "20px";
+            tableContainerEl.style.margin = "-20px 0 0 0";
+            tableContainerEl.style.borderRadius = "4px";
+        } else {
+            container.style.backgroundColor = "#1e1e1e";
+            container.style.color = "#d4d4d4";
+            container.style.minHeight = "100vh";
+            container.style.padding = "20px";
+            container.style.margin = "-20px";
+        }
+        
+        const tables = container.querySelectorAll("table");
+        tables.forEach(table => {
+            table.style.backgroundColor = "#252526";
+            table.style.color = "#d4d4d4";
+            
+            const headers = table.querySelectorAll("th");
+            headers.forEach(th => {
+                th.style.backgroundColor = "#2d2d30";
+                th.style.color = "#d4d4d4";
+                th.style.borderColor = "#3e3e42";
+            });
+            
+            const cells = table.querySelectorAll("td");
+            cells.forEach(td => {
+                const row = td.parentElement;
+                const warningType = row ? row.getAttribute("data-due-warning") : null;
+                
+                if (warningType === "1-day") {
+                    td.style.backgroundColor = "transparent";
+                    td.style.color = "#ffffff";
+                } else if (warningType === "2-day") {
+                    td.style.backgroundColor = "#cc6600";
+                    td.style.color = "#ffffff";
+                } else {
+                    td.style.backgroundColor = "#252526";
+                    td.style.color = "#d4d4d4";
+                }
+                td.style.borderColor = "#3e3e42";
+            });
+        });
+        
+        const buttons = container.querySelectorAll("button");
+        buttons.forEach(button => {
+            const buttonText = button.textContent.trim();
+            const isSortButton = buttonText === "↑" || buttonText === "↓";
+            const buttonBg = window.getComputedStyle(button).backgroundColor;
+            const hasSpecialColor = buttonBg && 
+                buttonBg !== "rgba(0, 0, 0, 0)" && 
+                buttonBg !== "transparent" &&
+                buttonBg !== "rgb(245, 245, 245)" &&
+                buttonBg !== "rgb(62, 62, 66)";
+            
+            if (isSortButton) {
+                button.style.backgroundColor = "#3e3e42";
+                button.style.color = "#d4d4d4";
+                button.style.borderColor = "#555";
+            } else if (!hasSpecialColor && (!button.style.backgroundColor || button.style.backgroundColor === "rgb(245, 245, 245)")) {
+                button.style.backgroundColor = "#3e3e42";
+                button.style.color = "#d4d4d4";
+                button.style.borderColor = "#555";
+            }
+        });
+        
+        const inputs = container.querySelectorAll("input, select");
+        inputs.forEach(input => {
+            const isKeywordFilter = input.id && input.id.includes("_keywordFilter");
+            if (isKeywordFilter) {
+                input.style.backgroundColor = "#3e3e42";
+                input.style.color = "#d4d4d4";
+                input.style.borderColor = "#555";
+            } else {
+                const currentBg = window.getComputedStyle(input).backgroundColor;
+                const isPrioritySelect = input.tagName === "SELECT" && 
+                    currentBg && 
+                    currentBg !== "rgba(0, 0, 0, 0)" && 
+                    currentBg !== "transparent" &&
+                    currentBg !== "rgb(62, 62, 66)" &&
+                    currentBg !== "rgb(255, 255, 255)";
+                
+                if (isPrioritySelect) {
+                    const rgb = currentBg.match(/\d+/g);
+                    if (rgb && rgb.length >= 3) {
+                        const r = parseInt(rgb[0]);
+                        const g = parseInt(rgb[1]);
+                        const b = parseInt(rgb[2]);
+                        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                        input.style.color = brightness > 128 ? "#000000" : "#ffffff";
+                    }
+                } else {
+                    input.style.backgroundColor = "#3e3e42";
+                    input.style.color = "#d4d4d4";
+                    input.style.borderColor = "#555";
+                }
+            }
+        });
+        
+        if (settingsMenu) {
+            settingsMenu.style.backgroundColor = "#252526";
+            settingsMenu.style.color = "#d4d4d4";
+            settingsMenu.style.borderColor = "#3e3e42";
+        }
+        
+        const filterLabel = container.querySelector(`label[for="${tagTableContainer}_keywordFilter"]`);
+        if (filterLabel) {
+            filterLabel.style.color = "#d4d4d4";
+        }
+    } else {
+        const tableContainerEl = document.getElementById(tagTableContainer);
+        if (tableContainerEl) {
+            tableContainerEl.style.backgroundColor = "";
+            tableContainerEl.style.color = "";
+            tableContainerEl.style.padding = "";
+            tableContainerEl.style.margin = "";
+            tableContainerEl.style.borderRadius = "";
+        } else {
+            container.style.backgroundColor = "";
+            container.style.color = "";
+            container.style.minHeight = "";
+            container.style.padding = "";
+            container.style.margin = "";
+        }
+        
+        const tables = container.querySelectorAll("table");
+        tables.forEach(table => {
+            table.style.backgroundColor = "";
+            table.style.color = "";
+            
+            const headers = table.querySelectorAll("th");
+            headers.forEach(th => {
+                th.style.backgroundColor = "#f2f2f2";
+                th.style.color = "";
+                th.style.borderColor = "#ddd";
+            });
+            
+            const cells = table.querySelectorAll("td");
+            cells.forEach(td => {
+                td.style.backgroundColor = "";
+                td.style.color = "";
+                td.style.borderColor = "#ddd";
+            });
+        });
+        
+        const buttons = container.querySelectorAll("button");
+        buttons.forEach(button => {
+            if (button.style.backgroundColor === "rgb(62, 62, 66)") {
+                button.style.backgroundColor = "";
+                button.style.color = "";
+                button.style.borderColor = "";
+            }
+        });
+        
+        const inputs = container.querySelectorAll("input, select");
+        inputs.forEach(input => {
+            const isKeywordFilter = input.id && input.id.includes("_keywordFilter");
+            if (isKeywordFilter) {
+                input.style.backgroundColor = "";
+                input.style.color = "";
+                input.style.borderColor = "";
+            } else {
+                const currentBg = window.getComputedStyle(input).backgroundColor;
+                const isPrioritySelect = input.tagName === "SELECT" && 
+                    currentBg && 
+                    currentBg !== "rgba(0, 0, 0, 0)" && 
+                    currentBg !== "transparent" &&
+                    currentBg !== "rgb(62, 62, 66)" &&
+                    currentBg !== "rgb(255, 255, 255)";
+                
+                if (!isPrioritySelect) {
+                    input.style.backgroundColor = "";
+                    input.style.color = "";
+                    input.style.borderColor = "";
+                } else {
+                    input.style.color = "#000000";
+                }
+            }
+        });
+        
+        if (settingsMenu) {
+            settingsMenu.style.backgroundColor = "#ffffff";
+            settingsMenu.style.color = "";
+            settingsMenu.style.borderColor = "#ccc";
+        }
+        
+        const filterLabel = container.querySelector(`label[for="${tagTableContainer}_keywordFilter"]`);
+        if (filterLabel) {
+            filterLabel.style.color = "";
+        }
+    }
 }
-
-  
 
 const tableContainer = dv.el("div", "", { attr: { id: tagTableContainer } });
 
-  
-
 const currentFilePath = currentFile ? currentFile.path : "";
-
 const isLogicTemplate = tagName === "Logic" && !currentFilePath.includes("/Tags/");
-
 let settingsContainer = null;
 
-  
-
 if (!isLogicTemplate) {
-
-    const headerContainer = document.createElement("div");
-
-    headerContainer.style.display = "flex";
-
-    headerContainer.style.justifyContent = "space-between";
-
-    headerContainer.style.alignItems = "center";
-
-    headerContainer.style.marginBottom = "20px";
-
-    headerContainer.style.width = "100%";
-
-    headerContainer.style.gap = "10px";
-
-    const filterContainer = document.createElement("div");
-
-    filterContainer.style.display = "flex";
-
-    filterContainer.style.alignItems = "center";
-
-    filterContainer.style.gap = "8px";
-
-    const filterLabel = document.createElement("label");
-
-    filterLabel.textContent = "Filter:";
-
-    filterLabel.setAttribute("for", tagTableContainer + "_keywordFilter");
-
-    filterLabel.style.fontSize = "14px";
-
-    filterLabel.style.color = "#333";
-
-    const keywordFilter = document.createElement("input");
-
-    keywordFilter.type = "text";
-
-    keywordFilter.id = tagTableContainer + "_keywordFilter";
-
-    keywordFilter.placeholder = "Search keywords...";
-
-    keywordFilter.style.padding = "6px 10px";
-
-    keywordFilter.style.border = "1px solid #ccc";
-
-    keywordFilter.style.borderRadius = "4px";
-
-    keywordFilter.style.fontSize = "14px";
-
-    keywordFilter.style.width = "250px";
-
-    keywordFilter.style.boxSizing = "border-box";
-
-    keywordFilter.addEventListener("input", () => {
-
-        renderTable();
-
-    });
-
-    filterContainer.appendChild(filterLabel);
-
-    filterContainer.appendChild(keywordFilter);
-
-    headerContainer.appendChild(filterContainer);
-
-    settingsContainer = document.createElement("div");
-
-    settingsContainer.id = tagTableContainer + "_settings";
-
-    settingsContainer.style.display = "flex";
-
-    settingsContainer.style.alignItems = "center";
-
-    headerContainer.appendChild(settingsContainer);
-
-    dv.container.appendChild(headerContainer);
-
+    const headerContainer = document.createElement("div");
+    headerContainer.style.display = "flex";
+    headerContainer.style.justifyContent = "space-between";
+    headerContainer.style.alignItems = "center";
+    headerContainer.style.marginBottom = "20px";
+    headerContainer.style.width = "100%";
+    headerContainer.style.gap = "10px";
+    
+    const filterContainer = document.createElement("div");
+    filterContainer.style.display = "flex";
+    filterContainer.style.alignItems = "center";
+    filterContainer.style.gap = "8px";
+    
+    const filterLabel = document.createElement("label");
+    filterLabel.textContent = "Filter:";
+    filterLabel.setAttribute("for", tagTableContainer + "_keywordFilter");
+    filterLabel.style.fontSize = "14px";
+    filterLabel.style.color = "#333";
+    
+    const keywordFilter = document.createElement("input");
+    keywordFilter.type = "text";
+    keywordFilter.id = tagTableContainer + "_keywordFilter";
+    keywordFilter.placeholder = "Search keywords...";
+    keywordFilter.style.padding = "6px 10px";
+    keywordFilter.style.border = "1px solid #ccc";
+    keywordFilter.style.borderRadius = "4px";
+    keywordFilter.style.fontSize = "14px";
+    keywordFilter.style.width = "250px";
+    keywordFilter.style.boxSizing = "border-box";
+    
+    keywordFilter.addEventListener("input", () => {
+        renderTable();
+    });
+    
+    filterContainer.appendChild(filterLabel);
+    filterContainer.appendChild(keywordFilter);
+    headerContainer.appendChild(filterContainer);
+    
+    settingsContainer = document.createElement("div");
+    settingsContainer.id = tagTableContainer + "_settings";
+    settingsContainer.style.display = "flex";
+    settingsContainer.style.alignItems = "center";
+    headerContainer.appendChild(settingsContainer);
+    
+    dv.container.appendChild(headerContainer);
 }
-
-  
 
 dv.container.appendChild(tableContainer);
 
-  
-
 let columnVisibility = getColumnVisibility();
 
-  
-
 let settingsButton = null;
-
 let settingsMenu = null;
 
-  
-
 if (!isLogicTemplate) {
+    settingsButton = document.createElement("button");
+    settingsButton.textContent = "⚙️ Table Settings";
+    settingsButton.style.padding = "8px 16px";
+    settingsButton.style.cursor = "pointer";
+    settingsButton.style.border = "1px solid #ccc";
+    settingsButton.style.borderRadius = "4px";
+    settingsButton.style.backgroundColor = "#f5f5f5";
+    settingsButton.style.color = "#333";
+    settingsButton.style.fontSize = "14px";
+    settingsButton.style.marginBottom = "10px";
 
-    settingsButton = document.createElement("button");
-
-    settingsButton.textContent = "⚙️ Table Settings";
-
-    settingsButton.style.padding = "8px 16px";
-
-    settingsButton.style.cursor = "pointer";
-
-    settingsButton.style.border = "1px solid #ccc";
-
-    settingsButton.style.borderRadius = "4px";
-
-    settingsButton.style.backgroundColor = "#f5f5f5";
-
-    settingsButton.style.color = "#333";
-
-    settingsButton.style.fontSize = "14px";
-
-    settingsButton.style.marginBottom = "10px";
-
-  
-
-    settingsMenu = document.createElement("div");
-
-    settingsMenu.style.display = "none";
-
-    settingsMenu.style.position = "absolute";
-
-    settingsMenu.style.backgroundColor = "#ffffff";
-
-    settingsMenu.style.border = "1px solid #ccc";
-
-    settingsMenu.style.borderRadius = "4px";
-
-    settingsMenu.style.padding = "16px";
-
-    settingsMenu.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
-
-    settingsMenu.style.zIndex = "1000";
-
-    settingsMenu.style.minWidth = "250px";
-
-    settingsMenu.style.marginTop = "5px";
-
+    settingsMenu = document.createElement("div");
+    settingsMenu.style.display = "none";
+    settingsMenu.style.position = "absolute";
+    settingsMenu.style.backgroundColor = "#ffffff";
+    settingsMenu.style.border = "1px solid #ccc";
+    settingsMenu.style.borderRadius = "4px";
+    settingsMenu.style.padding = "16px";
+    settingsMenu.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+    settingsMenu.style.zIndex = "1000";
+    settingsMenu.style.minWidth = "250px";
+    settingsMenu.style.marginTop = "5px";
 }
-
-  
 
 function renderSettingsMenu() {
-
-    if (!settingsMenu) return;
-
-    settingsMenu.innerHTML = "";
-
-    const title = document.createElement("div");
-
-    title.textContent = "Table Settings";
-
-    title.style.fontWeight = "bold";
-
-    title.style.marginBottom = "16px";
-
-    title.style.fontSize = "18px";
-
-    title.style.borderBottom = "1px solid #ddd";
-
-    title.style.paddingBottom = "8px";
-
-    settingsMenu.appendChild(title);
-
-    const darkModeRow = document.createElement("div");
-
-    darkModeRow.style.display = "flex";
-
-    darkModeRow.style.alignItems = "center";
-
-    darkModeRow.style.marginBottom = "16px";
-
-    darkModeRow.style.paddingBottom = "12px";
-
-    darkModeRow.style.borderBottom = "1px solid #ddd";
-
-    const darkModeCheckbox = document.createElement("input");
-
-    darkModeCheckbox.type = "checkbox";
-
-    darkModeCheckbox.checked = getDarkMode();
-
-    darkModeCheckbox.style.marginRight = "8px";
-
-    darkModeCheckbox.style.cursor = "pointer";
-
-    darkModeCheckbox.addEventListener("change", () => {
-
-        const enabled = darkModeCheckbox.checked;
-
-        saveDarkMode(enabled);
-
-        applyDarkMode(enabled);
-
-    });
-
-    const darkModeLabel = document.createElement("label");
-
-    darkModeLabel.textContent = "Dark Mode";
-
-    darkModeLabel.style.cursor = "pointer";
-
-    darkModeLabel.style.flex = "1";
-
-    darkModeLabel.style.fontWeight = "500";
-
-    darkModeLabel.addEventListener("click", () => {
-
-        darkModeCheckbox.checked = !darkModeCheckbox.checked;
-
-        const enabled = darkModeCheckbox.checked;
-
-        saveDarkMode(enabled);
-
-        applyDarkMode(enabled);
-
-    });
-
-    darkModeRow.appendChild(darkModeCheckbox);
-
-    darkModeRow.appendChild(darkModeLabel);
-
-    settingsMenu.appendChild(darkModeRow);
-
-    const columnSectionTitle = document.createElement("div");
-
-    columnSectionTitle.textContent = "Show/Hide Columns";
-
-    columnSectionTitle.style.fontWeight = "bold";
-
-    columnSectionTitle.style.marginBottom = "12px";
-
-    columnSectionTitle.style.marginTop = "8px";
-
-    columnSectionTitle.style.fontSize = "14px";
-
-    settingsMenu.appendChild(columnSectionTitle);
-
-    const columnLabels = {
-
-        [COLUMN_KEYS.PRIORITY]: "Priority",
-
-        [COLUMN_KEYS.STATUS]: "Status",
-
-        [COLUMN_KEYS.TAG]: "Tag",
-
-        [COLUMN_KEYS.TASK]: "Task",
-
-        [COLUMN_KEYS.DOCUMENT]: "Document",
-
-        [COLUMN_KEYS.DUE_DATE]: "Due Date",
-
-        [COLUMN_KEYS.LAST_EDIT]: "Last Edit",
-
-        [COLUMN_KEYS.ARCHIVE]: "Archive"
-
-    };
-
-    Object.keys(columnLabels).forEach(key => {
-
-        const row = document.createElement("div");
-
-        row.style.display = "flex";
-
-        row.style.alignItems = "center";
-
-        row.style.marginBottom = "8px";
-
-        const checkbox = document.createElement("input");
-
-        checkbox.type = "checkbox";
-
-        checkbox.checked = columnVisibility[key];
-
-        checkbox.style.marginRight = "8px";
-
-        checkbox.style.cursor = "pointer";
-
-        checkbox.addEventListener("change", () => {
-
-            columnVisibility[key] = checkbox.checked;
-
-            saveColumnVisibility(columnVisibility);
-
-            renderTable();
-
-        });
-
-        const label = document.createElement("label");
-
-        label.textContent = columnLabels[key];
-
-        label.style.cursor = "pointer";
-
-        label.style.flex = "1";
-
-        label.addEventListener("click", () => {
-
-            checkbox.checked = !checkbox.checked;
-
-            columnVisibility[key] = checkbox.checked;
-
-            saveColumnVisibility(columnVisibility);
-
-            renderTable();
-
-        });
-
-        row.appendChild(checkbox);
-
-        row.appendChild(label);
-
-        settingsMenu.appendChild(row);
-
-    });
-
-    const closeButton = document.createElement("button");
-
-    closeButton.textContent = "Close";
-
-    closeButton.style.padding = "6px 12px";
-
-    closeButton.style.marginTop = "12px";
-
-    closeButton.style.cursor = "pointer";
-
-    closeButton.style.border = "1px solid #ccc";
-
-    closeButton.style.borderRadius = "4px";
-
-    closeButton.style.backgroundColor = "#f5f5f5";
-
-    closeButton.addEventListener("click", () => {
-
-        settingsMenu.style.display = "none";
-
-    });
-
-    settingsMenu.appendChild(closeButton);
-
+    if (!settingsMenu) return;
+    
+    settingsMenu.innerHTML = "";
+    
+    const title = document.createElement("div");
+    title.textContent = "Table Settings";
+    title.style.fontWeight = "bold";
+    title.style.marginBottom = "16px";
+    title.style.fontSize = "18px";
+    title.style.borderBottom = "1px solid #ddd";
+    title.style.paddingBottom = "8px";
+    settingsMenu.appendChild(title);
+    
+    const darkModeRow = document.createElement("div");
+    darkModeRow.style.display = "flex";
+    darkModeRow.style.alignItems = "center";
+    darkModeRow.style.marginBottom = "16px";
+    darkModeRow.style.paddingBottom = "12px";
+    darkModeRow.style.borderBottom = "1px solid #ddd";
+    
+    const darkModeCheckbox = document.createElement("input");
+    darkModeCheckbox.type = "checkbox";
+    darkModeCheckbox.checked = getDarkMode();
+    darkModeCheckbox.style.marginRight = "8px";
+    darkModeCheckbox.style.cursor = "pointer";
+    
+    darkModeCheckbox.addEventListener("change", () => {
+        const enabled = darkModeCheckbox.checked;
+        saveDarkMode(enabled);
+        applyDarkMode(enabled);
+    });
+    
+    const darkModeLabel = document.createElement("label");
+    darkModeLabel.textContent = "Dark Mode";
+    darkModeLabel.style.cursor = "pointer";
+    darkModeLabel.style.flex = "1";
+    darkModeLabel.style.fontWeight = "500";
+    darkModeLabel.addEventListener("click", () => {
+        darkModeCheckbox.checked = !darkModeCheckbox.checked;
+        const enabled = darkModeCheckbox.checked;
+        saveDarkMode(enabled);
+        applyDarkMode(enabled);
+    });
+    
+    darkModeRow.appendChild(darkModeCheckbox);
+    darkModeRow.appendChild(darkModeLabel);
+    settingsMenu.appendChild(darkModeRow);
+    
+    const columnSectionTitle = document.createElement("div");
+    columnSectionTitle.textContent = "Show/Hide Columns";
+    columnSectionTitle.style.fontWeight = "bold";
+    columnSectionTitle.style.marginBottom = "12px";
+    columnSectionTitle.style.marginTop = "8px";
+    columnSectionTitle.style.fontSize = "14px";
+    settingsMenu.appendChild(columnSectionTitle);
+    
+    const columnLabels = {
+        [COLUMN_KEYS.PRIORITY]: "Priority",
+        [COLUMN_KEYS.STATUS]: "Status",
+        [COLUMN_KEYS.TAG]: "Tag",
+        [COLUMN_KEYS.TASK]: "Task",
+        [COLUMN_KEYS.DOCUMENT]: "Document",
+        [COLUMN_KEYS.DUE_DATE]: "Due Date",
+        [COLUMN_KEYS.LAST_EDIT]: "Last Edit",
+        [COLUMN_KEYS.ARCHIVE]: "Archive"
+    };
+    
+    Object.keys(columnLabels).forEach(key => {
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.marginBottom = "8px";
+        
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = columnVisibility[key];
+        checkbox.style.marginRight = "8px";
+        checkbox.style.cursor = "pointer";
+        
+        checkbox.addEventListener("change", () => {
+            columnVisibility[key] = checkbox.checked;
+            saveColumnVisibility(columnVisibility);
+            renderTable();
+        });
+        
+        const label = document.createElement("label");
+        label.textContent = columnLabels[key];
+        label.style.cursor = "pointer";
+        label.style.flex = "1";
+        label.addEventListener("click", () => {
+            checkbox.checked = !checkbox.checked;
+            columnVisibility[key] = checkbox.checked;
+            saveColumnVisibility(columnVisibility);
+            renderTable();
+        });
+        
+        row.appendChild(checkbox);
+        row.appendChild(label);
+        settingsMenu.appendChild(row);
+    });
+    
+    const closeButton = document.createElement("button");
+    closeButton.textContent = "Close";
+    closeButton.style.padding = "6px 12px";
+    closeButton.style.marginTop = "12px";
+    closeButton.style.cursor = "pointer";
+    closeButton.style.border = "1px solid #ccc";
+    closeButton.style.borderRadius = "4px";
+    closeButton.style.backgroundColor = "#f5f5f5";
+    closeButton.addEventListener("click", () => {
+        settingsMenu.style.display = "none";
+    });
+    settingsMenu.appendChild(closeButton);
 }
-
-  
 
 if (!isLogicTemplate && settingsButton && settingsMenu && settingsContainer) {
+    settingsButton.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (settingsMenu.style.display === "none") {
+            renderSettingsMenu();
+            settingsMenu.style.display = "block";
+            const buttonRect = settingsButton.getBoundingClientRect();
+            settingsMenu.style.position = "fixed";
+            settingsMenu.style.top = (buttonRect.bottom + 5) + "px";
+            settingsMenu.style.right = "20px";
+        } else {
+            settingsMenu.style.display = "none";
+        }
+    });
 
-    settingsButton.addEventListener("click", (e) => {
+    document.addEventListener("click", (e) => {
+        if (!settingsContainer.contains(e.target) && !settingsMenu.contains(e.target)) {
+            settingsMenu.style.display = "none";
+        }
+    });
 
-        e.stopPropagation();
-
-        if (settingsMenu.style.display === "none") {
-
-            renderSettingsMenu();
-
-            settingsMenu.style.display = "block";
-
-            const buttonRect = settingsButton.getBoundingClientRect();
-
-            settingsMenu.style.position = "fixed";
-
-            settingsMenu.style.top = (buttonRect.bottom + 5) + "px";
-
-            settingsMenu.style.right = "20px";
-
-        } else {
-
-            settingsMenu.style.display = "none";
-
-        }
-
-    });
-
-  
-
-    document.addEventListener("click", (e) => {
-
-        if (!settingsContainer.contains(e.target) && !settingsMenu.contains(e.target)) {
-
-            settingsMenu.style.display = "none";
-
-        }
-
-    });
-
-  
-
-    settingsContainer.appendChild(settingsButton);
-
-    settingsContainer.appendChild(settingsMenu);
-
+    settingsContainer.appendChild(settingsButton);
+    settingsContainer.appendChild(settingsMenu);
 }
 
-  
-  
 
   
 
 setTimeout(() => {
 
-  
-
-    renderTable();
-
-    if (!isLogicTemplate && getDarkMode()) {
-
-        applyDarkMode(true);
-
-    }
-
-//MrMaz Says Hi!
-
+    renderTable();
+    
+    if (!isLogicTemplate && getDarkMode()) {
+        applyDarkMode(true);
+    }
+//MrMaz Says Hi! 
 }, 100);
 
-  
-
 ```
+
